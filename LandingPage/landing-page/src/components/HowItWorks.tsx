@@ -1,7 +1,8 @@
 'use client';
 import {useRef, useState, useEffect} from "react";
-import {Search, CalendarCheck, Smile, Bot, User, Star, MousePointer2, BadgeCheck, Check} from "lucide-react";
+import {Search, Bot, User, Star, MousePointer2, BadgeCheck, Check} from "lucide-react";
 import {motion, useScroll, useMotionValueEvent, AnimatePresence} from "framer-motion";
+
 // --- REUSABLE TYPING COMPONENT ---
 const TypingText = ({text}: { text: string }) => {
     const [displayedText, setDisplayedText] = useState("");
@@ -22,7 +23,8 @@ const TypingText = ({text}: { text: string }) => {
                      className="inline-block w-0.5 h-4 bg-white align-middle ml-0.5 -translate-y-0.5"/>
     </p>);
 };
-// --- STEP 3 CONTENT (RESPONSIVE: provider card anchored to bottom; vehicle follows percent-based coordinates so it scales with phone) ---
+
+// --- STEP 3 CONTENT ---
 const TrackAndRelaxContent = () => {
     const [status, setStatus] = useState<'tracking' | 'completed'>('tracking');
     useEffect(() => {
@@ -53,7 +55,7 @@ const TrackAndRelaxContent = () => {
                 {/* Destination Pin */}
                 <circle cx="63.5%" cy="54%" r="6" fill="#D96C06"/>
             </svg>
-            {/* 3. Uber-like Vehicle (driver -> destination) - percent based positions so it scales */} {status === 'tracking' && (<>
+            {/* 3. Uber-like Vehicle (driver -> destination) - percent based positions so it scales */} {status === 'tracking' && <>
                 <motion.div className="absolute z-20 flex items-center justify-center"
                             initial={{left: '20%', top: '7%', rotate: 0}} animate={{
                     left: ['16.5%', '16.5%', '57.5%', '57.5%'],
@@ -67,7 +69,7 @@ const TrackAndRelaxContent = () => {
                             className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-b-[6px] border-b-white rotate-180"></div>
                     </div>
                 </motion.div>
-            </>)} {/* 4. Provider Detail Card - anchored to bottom inside phone area (responsive) */}
+            </>} {/* 4. Provider Detail Card - anchored to bottom inside phone area (responsive) */}
             <motion.div
                 className="absolute left-4 right-4 bottom-6 bg-white rounded-xl shadow-xl p-4 z-20 border border-gray-100/50"
                 initial={{y: 120, opacity: 0}} animate={{y: 0, opacity: 1}}
@@ -108,6 +110,7 @@ const TrackAndRelaxContent = () => {
                     className="text-[#0C2B4E] font-bold text-lg">Job Completed!</p></motion.div>
             </motion.div>)}            </AnimatePresence></div>);
 };
+
 // --- MAIN COMPONENT ---
 const HowItWorks = () => {
     const containerRef = useRef(null);
@@ -116,6 +119,7 @@ const HowItWorks = () => {
     useMotionValueEvent(scrollYProgress, "change", (latest) => {
         if (latest < 0.15) setActiveStep(0); else if (latest < 0.6) setActiveStep(1); else setActiveStep(2);
     });
+
     const steps = [{
         id: 1,
         title: "Search Service",
@@ -133,77 +137,80 @@ const HowItWorks = () => {
         </div>)
     },
         {
-        id: 2,
-        title: "Chat & Book",
-        desc: "Discuss a time slot and book your service.",
-        color: "bg-[#2B7FDE]",
-        hex: "#2B7FDE",
-        phoneContent: (<div className="w-full h-full flex flex-col relative overflow-hidden">
-            <motion.div className="absolute z-50 drop-shadow-xl"
-                        initial={{top: "15%", left: "50%", scale: 1, opacity: 0}} animate={{
-                top: ["15%", "85%"],
-                left: ["70%", "50%"],
-                opacity: [0, 1, 1, 1],
-                scale: [1, 1, 0.8, 1]
-            }} transition={{duration: 2.2, ease: "easeInOut", times: [0, 0.7, 0.85, 1], repeatDelay: 1.5}}>
-                <MousePointer2 className="w-8 h-8 text-black fill-white"/></motion.div>
-            {/* Top Section - 35% Height */}
-            <div className="h-[35%] w-full relative"></div>
-            {/* Bottom Section - 65% Height (Profile Card) */}
-            <div
-                className="h-[65%] w-full bg-white rounded-t-[2rem] px-6 py-8 flex flex-col justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.1)] relative z-10">
-                <div className="flex flex-col items-center gap-4 mt-4">
-                    <div
-                        className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center border-4 border-white shadow-sm">
-                        <User className="w-10 h-10 text-gray-400"/></div>
-                    <div className="text-center">
-                        <div className="flex justify-center gap-1.5 mb-1"><h4
-                            className="text-[#0C2B4E] font-bold text-xl">Shehan</h4><BadgeCheck
-                            style={{marginTop: '5px'}} className="w-5 h-5 fill-[#2B7FDE] text-[#2B7FDE] mt-1.5"/></div>
-                        <p className="text-gray-500 text-sm font-medium">Electrician</p>
+            id: 2,
+            title: "Chat & Book",
+            desc: "Discuss a time slot and book your service.",
+            color: "bg-[#2B7FDE]",
+            hex: "#2B7FDE",
+            phoneContent: (<div className="w-full h-full flex flex-col relative overflow-hidden">
+                <motion.div className="absolute z-50 drop-shadow-xl"
+                            initial={{top: "15%", left: "50%", scale: 1, opacity: 0}} animate={{
+                    top: ["15%", "85%"],
+                    left: ["70%", "50%"],
+                    opacity: [0, 1, 1, 1],
+                    scale: [1, 1, 0.8, 1]
+                }} transition={{duration: 2.2, ease: "easeInOut", times: [0, 0.7, 0.85, 1], repeatDelay: 1.5}}>
+                    <MousePointer2 className="w-8 h-8 text-black fill-white"/></motion.div>
+                {/* Top Section - 35% Height */}
+                <div className="h-[35%] w-full relative"></div>
+                {/* Bottom Section - 65% Height (Profile Card) */}
+                <div
+                    className="h-[65%] w-full bg-white rounded-t-[2rem] px-6 py-8 flex flex-col justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.1)] relative z-10">
+                    <div className="flex flex-col items-center gap-4 mt-4">
                         <div
-                            className="flex items-center justify-center gap-1.5 mt-2 bg-gray-50 py-1 px-3 rounded-full mx-auto w-fit">
-                            <Star className="w-3.5 h-3.5 text-[#D96C06] fill-[#D96C06]"/> <span
-                            className="text-xs text-gray-700 font-bold">4.9 (120 Reviews)</span></div>
+                            className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center border-4 border-white shadow-sm">
+                            <User className="w-10 h-10 text-gray-400"/></div>
+                        <div className="text-center">
+                            <div className="flex justify-center gap-1.5 mb-1"><h4
+                                className="text-[#0C2B4E] font-bold text-xl">Shehan</h4>
+                                <BadgeCheck style={{marginTop: '5px'}} className="w-5 h-5 fill-[#2B7FDE] text-white mt-1.5"/></div>
+                            <p className="text-gray-500 text-sm font-medium">Electrician</p>
+                            <div
+                                className="flex items-center justify-center gap-1.5 mt-2 bg-gray-50 py-1 px-3 rounded-full mx-auto w-fit">
+                                <Star className="w-3.5 h-3.5 text-[#D96C06] fill-[#D96C06]"/> <span
+                                className="text-xs text-gray-700 font-bold">4.9 (120 Reviews)</span></div>
+                        </div>
                     </div>
+                    <motion.button
+                        className="w-40 bg-[#10B981] text-white font-bold py-2.5 rounded-xl shadow-lg text-base mt-auto mb-4 mx-auto"
+                        animate={{scale: [1, 1, 0.95, 1]}}
+                        transition={{duration: 2.2, times: [0, 0.7, 0.85, 1], repeat: 5, repeatDelay: 1.5}}> Book Now
+                    </motion.button>
                 </div>
-                <motion.button
-                    className="w-40 bg-[#10B981] text-white font-bold py-2.5 rounded-xl shadow-lg text-base mt-auto mb-4 mx-auto"
-                    animate={{scale: [1, 1, 0.95, 1]}}
-                    transition={{duration: 2.2, times: [0, 0.7, 0.85, 1], repeat: 5, repeatDelay: 1.5}}> Book Now
-                </motion.button>
-            </div>
-        </div>)
-    },
+            </div>)
+        },
         {
-        id: 3,
-        title: "Track & Relax",
-        desc: "Track your service provider and consider your job done!",
-        color: "bg-[#D96C06]",
-        hex: "#D96C06",
-        phoneContent: <TrackAndRelaxContent/>
-    }];
-    return (
-        <section ref={containerRef} id="how-it-works" className="relative h-[300vh] bg-[#F5EFED]">
-            {/* CHANGED: Added h-[100dvh] for mobile full height, changed justify-center to justify-between to fit content */}
-            <div className="sticky top-0 flex h-[100dvh] md:h-screen flex-col items-center justify-between md:justify-center overflow-hidden py-4">
+            id: 3,
+            title: "Track & Relax",
+            desc: "Track your service provider and consider job done!",
+            color: "bg-[#D96C06]",
+            hex: "#D96C06",
+            phoneContent: <TrackAndRelaxContent/>
+        }];
 
-                {/* CHANGED: w-28 -> w-full. Increased translate-x-15 -> translate-x-36. Reduced mobile margins (mt-10 -> mt-2) */}
-                <div className="grid grid-cols-1 md:grid-cols-3 items-center w-full max-w-7xl px-6 relative h-auto translate-x-0 md:translate-x-36 mt-2 mb-6 md:mt-10 md:mb-0">
-                    <h1 className="text-4xl md:text-5xl font-bold text-[#0C2B4E] w-full text-center md:text-left mx-auto">
+    return (
+        <section ref={containerRef} id="how-it-works" className="relative h-[300vh] bg-gray-200">
+            <div className="sticky top-0 flex h-[100dvh] flex-col items-center justify-center overflow-hidden py-4">
+
+                {/* HEADER: Adjusted max-w and padding to be safe on all screens */}
+                <div className="w-full max-w-7xl px-6 flex justify-center md:justify-start mb-4 md:mb-10 ">
+                    {/* Removed hardcoded Translate-X to fix Tablet overlap */}
+                    <h1 className="text-4xl md:text-5xl font-bold text-[#0C2B4E] text-center md:text-left  md:translate-x-38">
                         How It Works
                     </h1>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 items-center justify-items-center w-full max-w-7xl px-6 relative h-auto gap-y-2 md:gap-y-0 ">
+                {/* MAIN CONTENT GRID: Fixed columns to be 2 on tablet, 3 on desktop */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-center w-full max-w-7xl px-6 h-auto ">
 
-                    <div className="hidden md:flex flex-col gap-4 items-end text-right pr-8 md:translate-x-25">
+                    {/* DESKTOP TEXT: Removed Translate-X, used justify-self-end */}
+                    <div className="hidden md:flex flex-col gap-4 items-end text-right pr-8 justify-self-end w-full translate-x-20">
                         <AnimatePresence mode="wait">
                             <motion.div key={activeStep} initial={{opacity: 0, x: -20}} animate={{opacity: 1, x: 0}}
                                         exit={{opacity: 0, x: -20}} transition={{duration: 0.5}}
                                         className="space-y-2 flex flex-col items-end">
-                                <div className="h-14 w-100 flex items-center justify-end">
-                                    <h3 className="text-4xl md:text-5xl font-bold text- text-right whitespace-nowrap" style={{ color: steps[activeStep].hex }}>
+                                <div className="h-14 w-full flex items-center justify-end">
+                                    <h3 className="text-4xl md:text-5xl font-bold whitespace-nowrap" style={{ color: steps[activeStep].hex }}>
                                         {steps[activeStep].title}
                                     </h3>
                                 </div>
@@ -214,53 +221,60 @@ const HowItWorks = () => {
                                 </div>
                             </motion.div>
                         </AnimatePresence>
-                        <div className="flex gap-1 mt-2 justify-end">{steps.map((_, idx) => (
-                            <div key={idx}
-                                 className={`h-2 rounded-full transition-all duration-500 ${idx === activeStep ? 'w-8 ' + steps[activeStep].color : 'w-2 bg-gray-300'}`}></div>))}                        </div>
-                    </div>
-
-
-                    {/* pretty sure its mobile content from hereon */}
-
-
-                    <div className="relative z-30 translate-x-0 md:translate-x-30">
-                        {/* STRICTLY KEPT ORIGINAL SIZE: w-[260px] h-[520px] */}
-                        <div
-                            className="w-[260px] h-[520px] bg-[#0C2B4E] rounded-[2.5rem] shadow-2xl border-[8px] border-[#0C2B4E] overflow-hidden relative mx-auto">
-                            <motion.div className="w-full h-full relative"
-                                        animate={{backgroundColor: steps[activeStep].hex}} transition={{duration: 0.5}}>
-                                <AnimatePresence mode="wait">
-                                    <motion.div
-                                        key={activeStep}
-                                        initial={{opacity: 0, scale: 0.8}}
-                                        animate={{opacity: 1, scale: 1}} exit={{opacity: 0, scale: 0.8}}
-                                        transition={{duration: 0.4}}
-                                        className="w-full h-full">
-                                        {steps[activeStep].phoneContent}
-                                    </motion.div>
-                                </AnimatePresence></motion.div>
+                        <div className="flex gap-1 mt-2 justify-end">
+                            {steps.map((_, idx) => (
+                                <div key={idx}
+                                     className={`h-2 rounded-full transition-all duration-500 ${idx === activeStep ? 'w-8 ' + steps[activeStep].color : 'w-2 bg-gray-300'}`}></div>))}
                         </div>
                     </div>
 
-                    {/* CHANGED: Removed pt-2, reduced mt-4 to mt-2 to pull text up so it's visible */}
-                    <div className="flex flex-col items-center md:hidden text-center px-2 w-full mt-2">
+                    {/* MOBILE TEXT: Visible only on small screens */}
+                    <div className="flex flex-col items-center md:hidden text-center px-2 w-full mb-6 ">
                         <AnimatePresence mode="wait">
                             <motion.div key={activeStep} initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}
                                         exit={{opacity: 0, y: -10}} transition={{duration: 0.3}}
                                         className="flex flex-col items-center">
-                                <div className="h-8 flex items-center"><h3
-                                    className="text-2xl font-bold " style={{ color: steps[activeStep].hex }}>{steps[activeStep].title}</h3></div>
-                                <div className="h-8 flex items-start "><p
-                                    className="text-sm text-[#0C2B4E]/70 max-w-sm mx-auto leading-tight">{steps[activeStep].desc}</p></div>
+                                <div className="h-8 flex items-center">
+                                    <h3 className="text-2xl font-bold" style={{ color: steps[activeStep].hex }}>{steps[activeStep].title}</h3>
+                                </div>
+                                <div className="h-8 flex items-start">
+                                    <p className="text-sm text-[#0C2B4E]/70 max-w-sm mx-auto leading-tight">{steps[activeStep].desc}</p>
+                                </div>
                             </motion.div>
                         </AnimatePresence>
-                        <div className="flex gap-1 justify-center">
+                        <div className="flex gap-1 justify-center mt-2">
                             {steps.map((_, idx) => (
-                            <div key={idx} className={`h-2 rounded-full transition-all duration-500 ${idx === activeStep ? 'w-8 ' + steps[activeStep].color : 'w-2 bg-gray-300'}`}>
-                            </div>))}
+                                <div key={idx} className={`h-2 rounded-full transition-all duration-500 ${idx === activeStep ? 'w-8 ' + steps[activeStep].color : 'w-2 bg-gray-300'}`}>
+                                </div>))
+                            }
                         </div>
                     </div>
-                    <div className="hidden md:block"></div>
+
+                    {/* SPACER FOR LARGE SCREENS (Keep layout balanced) */}
+                    {/*<div className="hidden lg:block"></div>*/}
+
+                    {/* PHONE COMPONENT: Added Scale Wrapper for small devices */}
+                    <div className="relative z-30 flex justify-center md:justify-center lg:justify-center w-full md:translate-x-30">
+                        {/* SCALING WRAPPER: This scales the phone down on small screens without breaking internal pixel values */}
+                        <div className="transform scale-[0.85] xs:scale-90 sm:scale-100 origin-top md:origin-center-left lg:origin-center transition-transform duration-300">
+                            <div className="w-[260px] h-[520px] bg-[#0C2B4E] rounded-[2.5rem] shadow-2xl border-[8px] border-[#0C2B4E] overflow-hidden relative mx-auto">
+                                <motion.div className="w-full h-full relative"
+                                            animate={{backgroundColor: steps[activeStep].hex}} transition={{duration: 0.5}}>
+                                    <AnimatePresence mode="wait">
+                                        <motion.div
+                                            key={activeStep}
+                                            initial={{opacity: 0, scale: 0.8}}
+                                            animate={{opacity: 1, scale: 1}} exit={{opacity: 0, scale: 0.8}}
+                                            transition={{duration: 0.4}}
+                                            className="w-full h-full">
+                                            {steps[activeStep].phoneContent}
+                                        </motion.div>
+                                    </AnimatePresence>
+                                </motion.div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </section>
