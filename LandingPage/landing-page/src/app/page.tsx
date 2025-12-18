@@ -3,10 +3,10 @@
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import HowItWorks from "@/components/HowItWorks";
-import AIChat from "@/components/AIChat";
 import Features from "@/components/Features";
 import Footer from "@/components/Footer";
 import TopProviders from "@/components/TopProviders";
+import OurTeam from "@/components/OurTeam";
 
 export default function Home() {
     return (
@@ -16,7 +16,7 @@ export default function Home() {
             <HowItWorks />
             <Features />
             <TopProviders />
-            <AIChat />
+            <OurTeam/>
             <Footer />
         </main>
     );

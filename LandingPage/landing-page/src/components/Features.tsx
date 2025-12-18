@@ -70,7 +70,7 @@ const Features = () => {
                             style={{boxShadow: `-5px 5px 15px -10px ${themeColors.navy}`, backgroundColor: `${themeColors.offwhite}`}}
                         >
                          {/*Hover Gradient Background Effect */}
-                            <div className="absolute inset-0 bg-[#D96C06] translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out border-3 border-black"></div>
+                            <div className="absolute inset-0 bg-[#D96C06] translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out"></div>
                             <div className="relative z-10 flex flex-col items-center text-center gap-6 transition-colors duration-300">
                                 <div className="p-5 bg-[#F5EFED] rounded-xl group-hover:bg-white/20 group-hover:text-white text-[#19579F] transition-all duration-300 shadow-inner group-hover:shadow-none group-hover:scale-110 group-hover:rotate-6">
                                     {item.icon}
