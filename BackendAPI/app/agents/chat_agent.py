@@ -23,7 +23,7 @@ def get_chat_response(user_message: str) -> AgentResponse:
                 - The user may speak English, Sinhala (e.g., "මට වතුර බට හදන කෙනෙක් ඕනේ"), or Singlish (e.g., "Mata plumber kenek one").
                 
                 RULE A: REPLY TO USER
-                - Reply in the SAME language/script the user used.
+                - IMPORTANT - Reply in the SAME language/script the user used. 
                 - Example: User says "Mata...", you say "Hari, mama..."
 
                 RULE B: DATA TRANSLATION (Internal Search)
