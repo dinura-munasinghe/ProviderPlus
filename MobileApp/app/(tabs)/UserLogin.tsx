@@ -16,94 +16,172 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from 'expo-blur';
+import { router } from 'expo-router';
+import { loginUser } from '../services/authService';
+import { configureGoogleSignIn, signInWithGoogle } from "../services/googleAuthService";
 
-type UserRole = 'user' | 'provider';
+type UserRole = 'customer' | 'provider';
 type Language = 'ENG' | 'සිං';
 
 const UserLogin: React.FC = () => {
+
+    useEffect(() => {
+        configureGoogleSignIn();
+    }, []);
+
     // --- STATE ---
-    const [username, setUsername] = useState<string>("");
+    const [email, setEmail] = useState<string>("");
     const [password, setPassword] = useState<string>("");
     const [isPasswordVisible, setIsPasswordVisible] = useState<boolean>(false);
-    const [userRole, setUserRole] = useState<UserRole>("user");
+    const [userRole, setUserRole] = useState<UserRole>("customer");
     const [language, setLanguage] = useState<Language>('ENG');
     const [isTranslating, setIsTranslating] = useState<boolean>(false);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState<boolean>(false);
+
+    // Error states
+    const [emailError, setEmailError] = useState<string>("");
+    const [passwordError, setPasswordError] = useState<string>("");
 
     const [strings, setStrings] = useState({
         login: "LOG IN",
-        username: "Username",
+        email: "Email",
         password: "Password",
         forgot: "Forgot Password?",
         signin: "SIGN IN",
-        signup: "Didn’t sign up yet?",
-        user: "User",
+        signup: "Didn't sign up yet?",
+        user: "Customer",
         provider: "Provider",
         errorTitle: "Error",
         errorMsg: "Please fill in all fields"
     });
 
-    // // --- AUTOMATED TRANSLATION LOGIC ---
-    // const translateAll = async (targetLang: Language, role: UserRole) => {
-    //     // Change Username label based on role
-    //     const dynamicUserLabel = role === 'user' ? "Username" : "Provider Name";
-    //
-    //     const baseEnglish = {
-    //         login: "LOG IN",
-    //         username: dynamicUserLabel,
-    //         password: "Password",
-    //         forgot: "Forgot Password?",
-    //         signin: "SIGN IN",
-    //         signup: "Didn’t sign up yet?",
-    //         user: "User",
-    //         provider: "Provider",
-    //         errorTitle: "Error",
-    //         errorMsg: "Please fill in all fields"
-    //     };
-    //
-    //     if (targetLang === 'ENG') {
-    //         setStrings(baseEnglish);
-    //         return;
-    //     }
-    //
-    //     setIsTranslating(true);
-    //     const targetCode = 'si';
-    //     const translatedStrings = { ...baseEnglish };
-    //
-    //     try {
-    //         const keys = Object.keys(baseEnglish) as Array<keyof typeof baseEnglish>;
-    //         await Promise.all(keys.map(async (key) => {
-    //             const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetCode}&dt=t&q=${encodeURI(baseEnglish[key])}`;
-    //             const res = await fetch(url);
-    //             const data = await res.json();
-    //             if (data && data[0] && data[0][0]) {
-    //                 translatedStrings[key] = data[0][0][0];
-    //             }
-    //         }));
-    //         setStrings(translatedStrings);
-    //     } catch (error) {
-    //         console.error("Translation error:", error);
-    //     } finally {
-    //         setIsTranslating(false);
-    //     }
-    // };
-    //
-    // useEffect(() => {
-    //     translateAll(language, userRole);
-    // }, [language, userRole]);
+    // handle google sign in
+    const handleGoogleSignIn = async (): Promise<void> => {
+        setIsGoogleLoading(true);
+        try{
+            const response = await signInWithGoogle();
 
-    const handleLogin = (): void => {
-        if (!username.trim() || !password.trim()) {
-            Alert.alert(strings.errorTitle, strings.errorMsg);
+            //success
+            const welcomeMessage = response.is_new_user
+                ? `Welcome ${response.user_name}! Your account has been created.`
+                : `Welcome back, ${response.user_name}!`;
+
+            Alert.alert(
+                "Success!",
+                welcomeMessage,
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            router.replace("/(tabs)");
+                        }
+                    }
+                ]
+            )
+        }
+        catch(error: any){
+            Alert.alert(
+                "Google sign in failed",
+                error.message || "unable to sign in with Google. Please try again.",
+                [{text: "OK"}]
+            );
+        }
+        finally{
+            setIsGoogleLoading(false);
+        }
+    }
+
+    // Email validation
+    const validateEmail = (text: string) => {
+        setEmail(text);
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (text.trim().length === 0) {
+            setEmailError("Email is required");
+        } else if (!emailRegex.test(text)) {
+            setEmailError("Invalid email format");
+        } else {
+            setEmailError("");
+        }
+    };
+
+    // Password validation
+    const handlePasswordInput = (text: string) => {
+        setPassword(text);
+
+        if (text.length === 0) {
+            setPasswordError("Password is required");
+        } else {
+            setPasswordError("");
+        }
+    };
+
+    // Handle Login
+    const handleLogin = async (): Promise<void> => {
+        let hasError = false;
+
+        // Validate email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email.trim()) {
+            setEmailError("Email is required");
+            hasError = true;
+        } else if (!emailRegex.test(email)) {
+            setEmailError("Invalid email format");
+            hasError = true;
+        }
+
+        // Validate password
+        if (!password.trim()) {
+            setPasswordError("Password is required");
+            hasError = true;
+        }
+
+        if (hasError) {
+            Alert.alert(strings.errorTitle, "Please fix all errors before proceeding");
             return;
         }
-        Alert.alert("Success", `Logging in as ${userRole}`);
+
+        // Call API
+        setIsLoading(true);
+        try {
+            const response = await loginUser({
+                email: email.trim().toLowerCase(),
+                password: password
+            });
+
+            // Success!
+            Alert.alert(
+                "Welcome Back!",
+                `Successfully logged in as ${response.user_name}`,
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            // Navigate to home page
+                            router.replace('/(tabs)');
+                        }
+                    }
+                ]
+            );
+
+        } catch (error: any) {
+            // Show error message
+            Alert.alert(
+                "Login Failed",
+                error.message || "Incorrect email or password. Please try again.",
+                [{ text: "OK" }]
+            );
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
         <View style={styles.mainContainer}>
             <StatusBar barStyle="light-content" />
             <LinearGradient
-                colors={userRole === 'user' ? ['#00ADF5', '#004eba'] : ['#1086b5', '#022373']}
+                colors={userRole === 'customer' ? ['#00ADF5', '#004eba'] : ['#1086b5', '#022373']}
                 style={StyleSheet.absoluteFill}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             />
@@ -112,7 +190,7 @@ const UserLogin: React.FC = () => {
                 <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
                     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                        {/* HEADER LANGUAGE TOGGLE (image_3b8679.png style) */}
+                        {/* HEADER LANGUAGE TOGGLE */}
                         <View style={styles.header}>
                             <View style={styles.langToggleContainer}>
                                 <View style={styles.toggleBackground}>
@@ -129,7 +207,7 @@ const UserLogin: React.FC = () => {
                             {isTranslating && <ActivityIndicator size="small" color="#FFF" style={{ marginLeft: 10 }} />}
                         </View>
 
-                        {/* LOGO (style) */}
+                        {/* LOGO */}
                         <View style={styles.logoContainer}>
                             <Image source={require('../../assets/images/provider-logo.png')} style={styles.mainLogo} resizeMode="contain" />
                             <Text style={styles.welcomeText}>{strings.login}</Text>
@@ -137,12 +215,12 @@ const UserLogin: React.FC = () => {
 
                         {/* FORM SECTION */}
                         <View style={styles.formContainer}>
-                            {/* ROLE TOGGLE style) */}
+                            {/* ROLE TOGGLE */}
                             <View style={styles.inlineRoleToggle}>
                                 <View style={styles.toggleBackground}>
-                                    <Pressable style={styles.toggleButton} onPress={() => setUserRole('user')}>
-                                        {userRole === 'user' && <LinearGradient colors={['#00ADF5', '#0072FF']} style={[StyleSheet.absoluteFill, { borderRadius: 25 }]} />}
-                                        <Text style={[styles.toggleText, userRole === 'user' && styles.activeToggleText]}>{strings.user}</Text>
+                                    <Pressable style={styles.toggleButton} onPress={() => setUserRole('customer')}>
+                                        {userRole === 'customer' && <LinearGradient colors={['#00ADF5', '#0072FF']} style={[StyleSheet.absoluteFill, { borderRadius: 25 }]} />}
+                                        <Text style={[styles.toggleText, userRole === 'customer' && styles.activeToggleText]}>{strings.user}</Text>
                                     </Pressable>
                                     <Pressable style={styles.toggleButton} onPress={() => setUserRole('provider')}>
                                         {userRole === 'provider' && <LinearGradient colors={['#1086b5', '#022373']} style={[StyleSheet.absoluteFill, { borderRadius: 25 }]} />}
@@ -151,35 +229,112 @@ const UserLogin: React.FC = () => {
                                 </View>
                             </View>
 
-                            {/* GLASS INPUT FIELDS */}
-                            <BlurView intensity={25} tint="light" style={styles.inputWrapper}>
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder={strings.username}
-                                    placeholderTextColor="rgba(255,255,255,0.6)"
-                                    value={username}
-                                    onChangeText={setUsername}
-                                />
-                                <Image source={{ uri: "https://cdn-icons-png.flaticon.com/512/1077/1077114.png" }} style={styles.inputIcon} />
-                            </BlurView>
+                            {/* EMAIL INPUT */}
+                            <View>
+                                <BlurView intensity={25} tint="light" style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        placeholder={strings.email}
+                                        placeholderTextColor="rgba(255,255,255,0.6)"
+                                        value={email}
+                                        onChangeText={validateEmail}
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
+                                        editable={!isLoading}
+                                    />
+                                    <Image
+                                        source={{ uri: "https://cdn-icons-png.flaticon.com/512/1077/1077114.png" }}
+                                        style={styles.inputIcon}
+                                    />
+                                </BlurView>
+                                {emailError ? (
+                                    <Text style={styles.errorText}>{emailError}</Text>
+                                ) : null}
+                            </View>
 
-                            <BlurView intensity={25} tint="light" style={styles.inputWrapper}>
-                                <TextInput style={styles.textInput} placeholder={strings.password} placeholderTextColor="rgba(255,255,255,0.6)" secureTextEntry={!isPasswordVisible} value={password} onChangeText={setPassword} />
-                                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
-                                    <Image source={{ uri: isPasswordVisible ? "https://cdn-icons-png.flaticon.com/512/709/709612.png" : "https://cdn-icons-png.flaticon.com/512/2767/2767146.png" }} style={styles.inputIcon} />
-                                </Pressable>
-                            </BlurView>
+                            {/* PASSWORD INPUT */}
+                            <View>
+                                <BlurView intensity={25} tint="light" style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        placeholder={strings.password}
+                                        placeholderTextColor="rgba(255,255,255,0.6)"
+                                        secureTextEntry={!isPasswordVisible}
+                                        value={password}
+                                        onChangeText={handlePasswordInput}
+                                        editable={!isLoading}
+                                    />
+                                    <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)} disabled={isLoading}>
+                                        <Image
+                                            source={{
+                                                uri: isPasswordVisible
+                                                    ? "https://cdn-icons-png.flaticon.com/512/709/709612.png"
+                                                    : "https://cdn-icons-png.flaticon.com/512/2767/2767146.png"
+                                            }}
+                                            style={styles.inputIcon}
+                                        />
+                                    </Pressable>
+                                </BlurView>
+                                {passwordError ? (
+                                    <Text style={styles.errorText}>{passwordError}</Text>
+                                ) : null}
+                            </View>
 
-                            <Pressable style={styles.forgotPassContainer} onPress={() => Alert.alert(strings.forgot, "Reset link sent.")}>
+                            {/* FORGOT PASSWORD LINK */}
+                            <Pressable
+                                style={styles.forgotPassContainer}
+                                onPress={() => Alert.alert(strings.forgot, "Password reset feature coming soon!")}
+                                disabled={isLoading}
+                            >
                                 <Text style={styles.linkText}>{strings.forgot}</Text>
                             </Pressable>
 
                             {/* SIGN IN BUTTON */}
-                            <Pressable style={styles.loginButton} onPress={handleLogin}>
-                                <Text style={styles.loginButtonText}>{strings.signin}</Text>
+                            <Pressable
+                                style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+                                onPress={handleLogin}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator color="#000" size="small" />
+                                ) : (
+                                    <Text style={styles.loginButtonText}>{strings.signin}</Text>
+                                )}
                             </Pressable>
 
-                            <Pressable style={styles.signupTextContainer} onPress={() => Alert.alert(strings.signup, "Navigating...")}>
+
+                            {/*OR DIVIDER */}
+                            <View style={styles.dividerContainer}>
+                                <View style={styles.divider} />
+                                <Text style={styles.dividerText}>OR</Text>
+                                <View style={styles.divider} />
+                            </View>
+
+                            {/*GOOGLE SIGN-IN BUTTON */}
+                            <Pressable
+                                style={[styles.googleButton, (isLoading || isGoogleLoading) && styles.googleButtonDisabled]}
+                                onPress={handleGoogleSignIn}
+                                disabled={isLoading || isGoogleLoading}
+                            >
+                                {isGoogleLoading ? (
+                                    <ActivityIndicator color="#000" size="small" />
+                                ) : (
+                                    <>
+                                        <Image
+                                            source={{ uri: "https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png" }}
+                                            style={styles.googleIcon}
+                                        />
+                                        <Text style={styles.googleButtonText}>Continue with Google</Text>
+                                    </>
+                                )}
+                            </Pressable>
+
+                            {/* SIGN UP LINK */}
+                            <Pressable
+                                style={styles.signupTextContainer}
+                                onPress={() => router.push('/UserSignUp1')}
+                                disabled={isLoading}
+                            >
                                 <Text style={styles.signupText}>{strings.signup}</Text>
                             </Pressable>
                         </View>
@@ -221,19 +376,87 @@ const styles = StyleSheet.create({
         overflow: "hidden",
         padding: 2,
         marginBottom:50
-
     },
     toggleButton: { flex: 1, justifyContent: "center", alignItems: "center", borderRadius: 25},
     toggleText: { fontSize: 14, fontWeight: "bold", color: "#888", zIndex: 1 },
-    inputWrapper: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255, 255, 255, 0.2)", borderRadius: 30, height: 60, marginBottom: 20, paddingHorizontal: 20, borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.3)", overflow: 'hidden' },
+    inputWrapper: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "rgba(255, 255, 255, 0.2)",
+        borderRadius: 30,
+        height: 60,
+        marginBottom: 5,
+        paddingHorizontal: 20,
+        borderWidth: 1,
+        borderColor: "rgba(255, 255, 255, 0.3)",
+        overflow: 'hidden'
+    },
     textInput: { flex: 1, color: "#FFF", fontSize: 16 },
     inputIcon: { width: 22, height: 22, tintColor: "#FFF" },
-    forgotPassContainer: { alignSelf: "center", marginBottom: 25 },
+    forgotPassContainer: { alignSelf: "center", marginBottom: 25, marginTop: 10 },
     linkText: { color: "#FFF", textDecorationLine: "underline", fontSize: 14 },
-    loginButton: { backgroundColor: "#FFF", borderRadius: 30, height: 60, justifyContent: "center", alignItems: "center", elevation: 5, marginBottom: 20 },
+    loginButton: {
+        backgroundColor: "#FFF",
+        borderRadius: 30,
+        height: 60,
+        justifyContent: "center",
+        alignItems: "center",
+        elevation: 5,
+        marginBottom: 20
+    },
+    loginButtonDisabled: {
+        opacity: 0.7,
+    },
     loginButtonText: { color: "#000", fontSize: 18, fontWeight: "bold" },
     signupTextContainer: { alignSelf: "center", padding: 10 },
     signupText: { color: "#FFF", textDecorationLine: "underline", fontSize: 14 },
+    errorText: {
+        color: '#FFD700',
+        fontSize: 12,
+        marginLeft: 20,
+        marginBottom: 15,
+        fontWeight: '600',
+    },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: 20,
+    },
+    divider: {
+        flex: 1,
+        height: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    },
+    dividerText: {
+        color: '#FFF',
+        paddingHorizontal: 15,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    googleButton: {
+        backgroundColor: '#FFF',
+        borderRadius: 30,
+        height: 60,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 5,
+        marginBottom: 20,
+    },
+    googleButtonDisabled: {
+        opacity: 0.7,
+    },
+    googleIcon: {
+        width: 24,
+        height: 24,
+        marginRight: 12,
+    },
+    googleButtonText: {
+        color: '#000',
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });
+
 
 export default UserLogin;

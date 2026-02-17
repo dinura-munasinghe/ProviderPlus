@@ -44,7 +44,7 @@ app.add_middleware(
 
 app.include_router(chatbot_routes.router, prefix="/api/ai-chat", tags=["AI Chat"])
 app.include_router(analysis_routes.router, prefix="/api/ai-integration", tags=["AI Integration"])
-app.include_router(auth_routes.router, prefix="/api/login", tags=["login/signin"])
+app.include_router(auth_routes.router, prefix="/api", tags=["Authentication"])
 app.include_router(provider_routes.router, prefix="/api/category-search")
 
 

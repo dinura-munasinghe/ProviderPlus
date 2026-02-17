@@ -1,129 +1,113 @@
-import React, { useState } from 'react';
-import {View, Text, TextInput, Pressable, Image, ScrollView, StyleSheet, ActivityIndicator} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+    View,
+    Text,
+    TextInput,
+    Pressable,
+    Image,
+    ScrollView,
+    StyleSheet,
+    ActivityIndicator,
+    Alert
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { globalStyles, COLORS } from '@/app/styles/UserSignUpStyles';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Dropdown } from 'react-native-element-dropdown';
-import { Platform } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
+import { signupUser } from './services/authService';
+import {MaterialCommunityIcons} from "@expo/vector-icons";
+import { configureGoogleSignIn, signInWithGoogle } from "./services/googleAuthService";
 
-type UserRole = 'user' | 'provider';
+type UserRole = 'customer' | 'provider';
 type Language = 'ENG' | 'සිං';
 
-
 const UserSignUp1 = ({ navigation }: any) => {
-    const [profileImage, setProfileImage] = useState<string | null>(null);
-    const [dob, setDob] = useState("");
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [date, setDate] = useState(new Date());
 
+    useEffect(() => {
+        configureGoogleSignIn();
+    }, []);
+
+    // Language toggle
     const [language, setLanguage] = useState<Language>('ENG');
     const [isTranslating, setIsTranslating] = useState<boolean>(false);
 
-    const [strings, setStrings] = useState({
-        user: "User",
-        provider: "Provider",
+    // Role toggle
+    const [userRole, setUserRole] = useState<UserRole>("customer");
 
-    });
-
-
-    const [userRole, setUserRole] = useState<UserRole>("user");
-
-    // State for all fields
-    const [firstName, setFirstName] = useState("");
-    const [lastName, setLastName] = useState("");
+    // Form fields for CUSTOMER
+    const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
-    const [contactNo, setContactNo] = useState("");
-    const [address, setAddress] = useState("");
-    const [gender, setGender] = useState(null);
-    const [isFocus, setIsFocus] = useState(false);
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [phoneNumber, setPhoneNumber] = useState("");
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-    // Error states for ALL fields
-    const [firstNameError, setFirstNameError] = useState("");
-    const [lastNameError, setLastNameError] = useState("");
+    // Error states
+    const [fullNameError, setFullNameError] = useState("");
     const [emailError, setEmailError] = useState("");
-    const [contactError, setContactError] = useState("");
-    const [addressError, setAddressError] = useState("");
-    const [dobError, setDobError] = useState("");
-    const [genderError, setGenderError] = useState("");
-    const [profileError, setProfileError] = useState("");
+    const [passwordError, setPasswordError] = useState("");
+    const [confirmPasswordError, setConfirmPasswordError] = useState("");
+    const [phoneError, setPhoneError] = useState("");
 
-    const pickImage = async () => {
-        // Request permission
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    // Password visibility toggles
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-        if (status !== 'granted') {
-            alert('Permission to access camera roll is required!');
-            return;
-        }
+    // Loading state for API call
+    const [isLoading, setIsLoading] = useState(false);
 
-        // Open image picker with editing enabled
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,  // Enables crop/zoom on supported devices
-            aspect: [1, 1],
-            quality: 1,
-        });
-
-        if (!result.canceled) {
-            setProfileImage(result.assets[0].uri);
-            setProfileError(""); // Clear error when image is selected
-        }
-    };
-
-    // Dropdown options
-    const genderData = [
-        { label: 'Male', value: 'male' },
-        { label: 'Female', value: 'female' },
-        { label: 'Rather not say', value: 'rather_not_say' },
-    ];
-
-    // Function to handle date selection from the calendar
-    const onDateChange = (event: any, selectedDate?: Date) => {
-        setShowDatePicker(false);
-        if (selectedDate) {
-            setDate(selectedDate);
-            const year = selectedDate.getFullYear();
-            const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-            const day = String(selectedDate.getDate()).padStart(2, '0');
-
-            const formattedDate = `${year}-${month}-${day}`;
-            setDob(formattedDate);
-            setDobError(""); // Clear error when date is selected
-        }
-    };
-
-    // Function to allow only letters and spaces for first name
-    const handleFirstNameInput = (text: string) => {
+    // Validation functions
+    const handleFullNameInput = (text: string) => {
+        // Allow letters and spaces only
         const filteredText = text.replace(/[^a-zA-Z\s]/g, '');
-        setFirstName(filteredText);
+        setFullName(filteredText);
 
         if (filteredText.trim().length === 0) {
-            setFirstNameError("First name is required");
-        } else if (filteredText.trim().length < 2) {
-            setFirstNameError("First name must be at least 2 characters");
+            setFullNameError("Full name is required");
+        } else if (filteredText.trim().length < 3) {
+            setFullNameError("Full name must be at least 3 characters");
         } else {
-            setFirstNameError("");
+            setFullNameError("");
         }
     };
 
-    // Function to allow only letters and spaces for last name
-    const handleLastNameInput = (text: string) => {
-        const filteredText = text.replace(/[^a-zA-Z\s]/g, '');
-        setLastName(filteredText);
+    const handleGoogleSignIn = async (): Promise<void> => {
+        setIsGoogleLoading(true);
 
-        if (filteredText.trim().length === 0) {
-            setLastNameError("Last name is required");
-        } else if (filteredText.trim().length < 2) {
-            setLastNameError("Last name must be at least 2 characters");
-        } else {
-            setLastNameError("");
+        try{
+            const response = await signInWithGoogle();
+
+            const welcomeMessage = response.is_new_user
+                ? `Welcome ${response.user_name}! Your account has been created.`
+                : `Welcome back, ${response.user_name}!`;
+
+            Alert.alert(
+                "Success!",
+                welcomeMessage,
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            router.replace('/(tabs)');
+                        }
+                    }
+                ]
+            );
+
         }
-    };
+        catch (error: any) {
+            Alert.alert(
+                "Google Sign-In Failed",
+                error.message || "Unable to sign in with Google. Please try again.",
+                [{ text: "OK" }]
+            );
+        }
+        finally {
+            setIsGoogleLoading(false);
+        }
+    }
 
-    // Email validation function
     const validateEmail = (text: string) => {
         setEmail(text);
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -137,65 +121,71 @@ const UserSignUp1 = ({ navigation }: any) => {
         }
     };
 
-    // Contact number validation (only numbers, 10 digits)
-    const handleContactInput = (text: string) => {
-        const filteredText = text.replace(/[^0-9]/g, '');
+    const handlePasswordInput = (text: string) => {
+        setPassword(text);
 
-        if (filteredText.length <= 10) {
-            setContactNo(filteredText);
+        if (text.length === 0) {
+            setPasswordError("Password is required");
+        } else if (text.length < 8) {
+            setPasswordError("Password must be at least 8 characters");
+        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])/.test(text)) {
+            setPasswordError("Password must contain uppercase, lowercase, and number");
+        } else {
+            setPasswordError("");
+        }
 
-            if (filteredText.length === 0) {
-                setContactError("Contact number is required");
-            } else if (filteredText.length < 10) {
-                setContactError("Contact number must be exactly 10 digits");
+        // Re-validate confirm password if it's already filled
+        if (confirmPassword) {
+            if (text !== confirmPassword) {
+                setConfirmPasswordError("Passwords do not match");
             } else {
-                setContactError("");
+                setConfirmPasswordError("");
             }
         }
     };
 
-    // Address validation
-    const handleAddressInput = (text: string) => {
-        setAddress(text);
+    const handleConfirmPasswordInput = (text: string) => {
+        setConfirmPassword(text);
 
-        if (text.trim().length === 0) {
-            setAddressError("Address is required");
-        } else if (text.trim().length < 5) {
-            setAddressError("Address is too short");
+        if (text.length === 0) {
+            setConfirmPasswordError("Please confirm your password");
+        } else if (text !== password) {
+            setConfirmPasswordError("Passwords do not match");
         } else {
-            setAddressError("");
+            setConfirmPasswordError("");
         }
     };
 
-    // Check if all fields are valid before navigation
-    const handleNext = () => {
+    const handlePhoneInput = (text: string) => {
+        // Only numbers allowed
+        const filteredText = text.replace(/[^0-9]/g, '');
+
+        if (filteredText.length <= 10) {
+            setPhoneNumber(filteredText);
+
+            if (filteredText.length === 0) {
+                setPhoneError("Phone number is required");
+            } else if (filteredText.length < 10) {
+                setPhoneError("Phone number must be exactly 10 digits");
+            } else {
+                setPhoneError("");
+            }
+        }
+    };
+
+    // Submit handler with API call
+    const handleSignUp = async () => {
         let hasError = false;
 
-        // Validate profile image
-        if (!profileImage) {
-            setProfileError("Please upload a profile picture");
+        // Validate all fields
+        if (!fullName.trim()) {
+            setFullNameError("Full name is required");
+            hasError = true;
+        } else if (fullName.trim().length < 3) {
+            setFullNameError("Full name must be at least 3 characters");
             hasError = true;
         }
 
-        // Validate first name
-        if (!firstName.trim()) {
-            setFirstNameError("First name is required");
-            hasError = true;
-        } else if (firstName.trim().length < 2) {
-            setFirstNameError("First name must be at least 2 characters");
-            hasError = true;
-        }
-
-        // Validate last name
-        if (!lastName.trim()) {
-            setLastNameError("Last name is required");
-            hasError = true;
-        } else if (lastName.trim().length < 2) {
-            setLastNameError("Last name must be at least 2 characters");
-            hasError = true;
-        }
-
-        // Validate email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!email.trim()) {
             setEmailError("Email is required");
@@ -205,164 +195,222 @@ const UserSignUp1 = ({ navigation }: any) => {
             hasError = true;
         }
 
-        // Validate contact
-        if (!contactNo.trim()) {
-            setContactError("Contact number is required");
+        if (!password) {
+            setPasswordError("Password is required");
             hasError = true;
-        } else if (contactNo.length !== 10) {
-            setContactError("Contact number must be exactly 10 digits");
+        } else if (password.length < 8) {
+            setPasswordError("Password must be at least 8 characters");
             hasError = true;
-        }
-
-        // Validate address
-        if (!address.trim()) {
-            setAddressError("Address is required");
-            hasError = true;
-        } else if (address.trim().length < 5) {
-            setAddressError("Address is too short");
+        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])/.test(password)) {
+            setPasswordError("Password must contain uppercase, lowercase, and number");
             hasError = true;
         }
 
-        // Validate DOB
-        if (!dob) {
-            setDobError("Please select your date of birth");
+        if (!confirmPassword) {
+            setConfirmPasswordError("Please confirm your password");
+            hasError = true;
+        } else if (confirmPassword !== password) {
+            setConfirmPasswordError("Passwords do not match");
             hasError = true;
         }
 
-        // Validate gender
-        if (!gender) {
-            setGenderError("Please select your gender");
+        if (!phoneNumber.trim()) {
+            setPhoneError("Phone number is required");
+            hasError = true;
+        } else if (phoneNumber.length !== 10) {
+            setPhoneError("Phone number must be exactly 10 digits");
             hasError = true;
         }
 
-        // If any error, don't proceed
         if (hasError) {
-            alert("Please fix all errors before proceeding");
+            Alert.alert("Validation Error", "Please fix all errors before proceeding");
             return;
         }
 
-        // All validations passed
-        navigation.navigate('UserSignUp2', {
-            firstName,
-            lastName,
-            email,
-            contactNo,
-            address,
-            dob,
-            gender,
-            profileImage
-        });
+        // Call API
+        setIsLoading(true);
+        try {
+            const response = await signupUser({
+                full_name: fullName.trim(),
+                email: email.trim().toLowerCase(),
+                password: password,
+                phone_number: phoneNumber,
+                role: userRole
+            });
+
+            Alert.alert(
+                "Success!",
+                `Welcome ${response.user_name}! Your account has been created.`,
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            // Navigate to home page
+                            router.replace('/(tabs)');
+                        }
+                    }
+                ]
+            );
+
+        } catch (error: any) {
+            // Show error message
+            Alert.alert(
+                "Signup Failed",
+                error.message || "Something went wrong. Please try again.",
+                [{ text: "OK" }]
+            );
+        } finally {
+            setIsLoading(false);
+        }
     };
 
+    // Render Provider View (Coming Soon)
+    if (userRole === 'provider') {
+        return (
+            <View style={globalStyles.mainContainer}>
+                <LinearGradient colors={COLORS.userGradient} style={StyleSheet.absoluteFill} />
+                <SafeAreaView style={globalStyles.safeArea}>
+                    {/* Language Toggle */}
+                    <View style={styles.headerToggleLang}>
+                        <View style={styles.langToggleContainer}>
+                            <View style={styles.toggleBackground}>
+                                <Pressable style={styles.langButton} onPress={() => setLanguage('ENG')}>
+                                    {language === 'ENG' && (
+                                        <LinearGradient
+                                            colors={['#E440FF', '#5A1F63']}
+                                            style={[StyleSheet.absoluteFill, { borderRadius: 15 }]}
+                                        />
+                                    )}
+                                    <Text style={[styles.langText, language === 'ENG' && styles.activeToggleText]}>
+                                        ENG
+                                    </Text>
+                                </Pressable>
+                                <Pressable style={styles.langButton} onPress={() => setLanguage('සිං')}>
+                                    {language === 'සිං' && (
+                                        <LinearGradient
+                                            colors={['#E440FF', '#5A1F63']}
+                                            style={[StyleSheet.absoluteFill, { borderRadius: 15 }]}
+                                        />
+                                    )}
+                                    <Text style={[styles.langText, language === 'සිං' && styles.activeToggleText]}>
+                                        සිං
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                        {isTranslating && (
+                            <ActivityIndicator size="small" color="#FFF" style={{ marginLeft: 10 }} />
+                        )}
+                    </View>
+
+                    {/* Role Toggle */}
+                    <View style={styles.inlineRoleToggle}>
+                        <View style={styles.toggleBackground}>
+                            <Pressable style={styles.toggleButton} onPress={() => setUserRole('customer')}>
+                                <Text style={styles.toggleText}>Customer</Text>
+                            </Pressable>
+                            <Pressable style={styles.toggleButton} onPress={() => setUserRole('provider')}>
+                                <LinearGradient
+                                    colors={['#00ADF5', '#0066CC']}
+                                    style={[StyleSheet.absoluteFill, { borderRadius: 25 }]}
+                                />
+                                <Text style={[styles.toggleText, { color: '#FFF' }]}>Provider</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+
+                    <View style={styles.comingSoonContainer}>
+                        <Text style={styles.comingSoonTitle}>Provider Registration</Text>
+                        <Text style={styles.comingSoonText}>Coming Soon!</Text>
+                        <Text style={styles.comingSoonSubtext}>
+                            Provider signup requires additional verification and documentation.
+                        </Text>
+                    </View>
+                </SafeAreaView>
+            </View>
+        );
+    }
+
+    // Render Customer Sign Up Form
     return (
         <View style={globalStyles.mainContainer}>
             <LinearGradient colors={COLORS.userGradient} style={StyleSheet.absoluteFill} />
             <SafeAreaView style={globalStyles.safeArea}>
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: 40 }}
+                >
+                    {/* Language Toggle */}
+                    <View style={styles.headerToggleLang}>
+                        <View style={styles.langToggleContainer}>
+                            <View style={styles.toggleBackground}>
+                                <Pressable style={styles.langButton} onPress={() => setLanguage('ENG')}>
+                                    {language === 'ENG' && (
+                                        <LinearGradient
+                                            colors={['#E440FF', '#5A1F63']}
+                                            style={[StyleSheet.absoluteFill, { borderRadius: 15 }]}
+                                        />
+                                    )}
+                                    <Text style={[styles.langText, language === 'ENG' && styles.activeToggleText]}>
+                                        ENG
+                                    </Text>
+                                </Pressable>
+                                <Pressable style={styles.langButton} onPress={() => setLanguage('සිං')}>
+                                    {language === 'සිං' && (
+                                        <LinearGradient
+                                            colors={['#E440FF', '#5A1F63']}
+                                            style={[StyleSheet.absoluteFill, { borderRadius: 15 }]}
+                                        />
+                                    )}
+                                    <Text style={[styles.langText, language === 'සිං' && styles.activeToggleText]}>
+                                        සිං
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                        {isTranslating && (
+                            <ActivityIndicator size="small" color="#FFF" style={{ marginLeft: 10 }} />
+                        )}
+                    </View>
 
+                    {/* Title */}
+                    <Text style={globalStyles.title}>Create Your Account</Text>
 
-                <View style={styles.headerToggleLang}>
-                    <View style={styles.langToggleContainer}>
+                    {/* Role Toggle */}
+                    <View style={styles.inlineRoleToggle}>
                         <View style={styles.toggleBackground}>
-                            <Pressable style={styles.langButton} onPress={() => setLanguage('ENG')}>
-                                {language === 'ENG' && <LinearGradient colors={['#E440FF', '#5A1F63']} style={[StyleSheet.absoluteFill, { borderRadius: 15 }]} />}
-                                <Text style={[styles.langText, language === 'ENG' && styles.activeToggleText]}>ENG</Text>
+                            <Pressable style={styles.toggleButton} onPress={() => setUserRole('customer')}>
+                                <LinearGradient
+                                    colors={['#00ADF5', '#0066CC']}
+                                    style={[StyleSheet.absoluteFill, { borderRadius: 25 }]}
+                                />
+                                <Text style={[styles.toggleText, { color: '#FFF' }]}>Customer</Text>
                             </Pressable>
-                            <Pressable style={styles.langButton} onPress={() => setLanguage('සිං')}>
-                                {language === 'සිං' && <LinearGradient colors={['#E440FF', '#5A1F63']} style={[StyleSheet.absoluteFill, { borderRadius: 15 }]} />}
-                                <Text style={[styles.langText, language === 'සිං' && styles.activeToggleText]}>සිං</Text>
+                            <Pressable style={styles.toggleButton} onPress={() => setUserRole('provider')}>
+                                <Text style={styles.toggleText}>Provider</Text>
                             </Pressable>
                         </View>
                     </View>
-                    {isTranslating && <ActivityIndicator size="small" color="#FFF" style={{ marginLeft: 10 }} />}
-                </View>
 
-                {/* ROLE TOGGLE style) */}
-                <View style={styles.inlineRoleToggle}>
-                    <View style={styles.toggleBackground}>
-                        <Pressable style={styles.toggleButton} onPress={() => setUserRole('user')}>
-                            {userRole === 'user' && <LinearGradient colors={['#00ADF5', '#0072FF']} style={[StyleSheet.absoluteFill, { borderRadius: 25 }]} />}
-                            <Text style={[styles.toggleText, userRole === 'user' && styles.activeToggleText]}>{strings.user}</Text>
-                        </Pressable>
-                        <Pressable style={styles.toggleButton} onPress={() => setUserRole('provider')}>
-                            {userRole === 'provider' && <LinearGradient colors={['#1086b5', '#022373']} style={[StyleSheet.absoluteFill, { borderRadius: 25 }]} />}
-                            <Text style={[styles.toggleText, userRole === 'provider' && styles.activeToggleText]}>{strings.provider}</Text>
-                        </Pressable>
-                    </View>
-                </View>
-
-                <View style={globalStyles.stepContainer}>
-                    <View style={globalStyles.stepWrapper}>
-                        <Text style={globalStyles.stepText}>Step 1</Text>
-                        <View style={globalStyles.activeLine}/>
-                    </View>
-                    <View style={globalStyles.stepWrapper}>
-                        <Text style={globalStyles.inactiveStepText}>Step 2</Text>
-                        <View style={globalStyles.inactiveLine}/>
-                    </View>
-                    <View style={globalStyles.stepWrapper}>
-                        <Text style={globalStyles.inactiveStepText}>Step 3</Text>
-                        <View style={globalStyles.inactiveLine}/>
-                    </View>
-                </View>
-
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                    <Text style={globalStyles.title}>Personal Details</Text>
-
-                    {/* PROFILE PICTURE SECTION */}
-                    <View style={styles.profileContainer}>
-                        <Pressable style={styles.imageCircle} onPress={pickImage}>
-                            {profileImage ? (
-                                <Image source={{ uri: profileImage }} style={styles.profileImg} />
-                            ) : (
-                                <Image
-                                    source={require("../assets/images/profile.png")}
-                                    style={styles.placeholderImg}
-                                />
-                            )}
-                            <View style={styles.addIconContainer}>
-                                <Text style={styles.addIconText}>+</Text>
-                            </View>
-                        </Pressable>
-                        {profileError ? (
-                            <Text style={styles.errorText}>{profileError}</Text>
-                        ) : null}
-                    </View>
-
-                    {/* FIRST NAME - Letters Only */}
+                    {/* FULL NAME */}
                     <View>
                         <BlurView intensity={20} style={globalStyles.inputWrapper}>
                             <TextInput
-                                placeholder="First Name"
+                                placeholder="Full Name"
                                 placeholderTextColor="rgba(255,255,255,0.6)"
                                 style={globalStyles.textInput}
-                                value={firstName}
-                                onChangeText={handleFirstNameInput}
-                                keyboardType="default"
+                                value={fullName}
+                                onChangeText={handleFullNameInput}
+                                autoCapitalize="words"
+                                editable={!isLoading}
                             />
                         </BlurView>
-                        {firstNameError ? (
-                            <Text style={styles.errorText}>{firstNameError}</Text>
+                        {fullNameError ? (
+                            <Text style={styles.errorText}>{fullNameError}</Text>
                         ) : null}
                     </View>
 
-                    {/* LAST NAME - Letters Only */}
-                    <View>
-                        <BlurView intensity={20} style={globalStyles.inputWrapper}>
-                            <TextInput
-                                placeholder="Last Name"
-                                placeholderTextColor="rgba(255,255,255,0.6)"
-                                style={globalStyles.textInput}
-                                value={lastName}
-                                onChangeText={handleLastNameInput}
-                                keyboardType="default"
-                            />
-                        </BlurView>
-                        {lastNameError ? (
-                            <Text style={styles.errorText}>{lastNameError}</Text>
-                        ) : null}
-                    </View>
-
-                    {/* EMAIL - With Validation */}
+                    {/* EMAIL */}
                     <View>
                         <BlurView intensity={20} style={globalStyles.inputWrapper}>
                             <TextInput
@@ -373,6 +421,7 @@ const UserSignUp1 = ({ navigation }: any) => {
                                 onChangeText={validateEmail}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
+                                editable={!isLoading}
                             />
                         </BlurView>
                         {emailError ? (
@@ -380,111 +429,108 @@ const UserSignUp1 = ({ navigation }: any) => {
                         ) : null}
                     </View>
 
-                    {/* CONTACT NO - Numbers Only, 10 digits */}
+                    {/* PHONE NUMBER */}
                     <View>
                         <BlurView intensity={20} style={globalStyles.inputWrapper}>
                             <TextInput
-                                placeholder="Contact No."
+                                placeholder="Phone Number"
                                 placeholderTextColor="rgba(255,255,255,0.6)"
                                 style={globalStyles.textInput}
-                                value={contactNo}
-                                onChangeText={handleContactInput}
+                                value={phoneNumber}
+                                onChangeText={handlePhoneInput}
                                 keyboardType="phone-pad"
                                 maxLength={10}
+                                editable={!isLoading}
                             />
                         </BlurView>
-                        {contactError ? (
-                            <Text style={styles.errorText}>{contactError}</Text>
+                        {phoneError ? (
+                            <Text style={styles.errorText}>{phoneError}</Text>
                         ) : null}
                     </View>
 
-                    {/* ADDRESS */}
+                    {/* PASSWORD */}
                     <View>
                         <BlurView intensity={20} style={globalStyles.inputWrapper}>
                             <TextInput
-                                placeholder="Address"
+                                placeholder="Password"
                                 placeholderTextColor="rgba(255,255,255,0.6)"
-                                style={globalStyles.textInput}
-                                value={address}
-                                onChangeText={handleAddressInput}
+                                style={[globalStyles.textInput, { flex: 1 }]}
+                                value={password}
+                                onChangeText={handlePasswordInput}
+                                secureTextEntry={!showPassword}
+                                autoCapitalize="none"
+                                editable={!isLoading}
                             />
-                        </BlurView>
-                        {addressError ? (
-                            <Text style={styles.errorText}>{addressError}</Text>
-                        ) : null}
-                    </View>
-
-                    {/* DATE OF BIRTH SECTION */}
-                    <View>
-                        <BlurView intensity={20} style={globalStyles.inputWrapper}>
-                            <TextInput
-                                placeholder="Date of Birth"
-                                placeholderTextColor="rgba(255,255,255,0.6)"
-                                style={globalStyles.textInput}
-                                value={dob}
-                                editable={false}
-                            />
-                            <Pressable onPress={() => setShowDatePicker(true)}>
-                                <Image
-                                    source={require("../assets/images/dob.png")}
-                                    style={{ width: 24, height: 24, tintColor: '#FFF' }}
+                            <Pressable
+                                onPress={() => setShowPassword(!showPassword)}
+                                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                            >
+                                <MaterialCommunityIcons
+                                    name={showPassword ? "eye" : "eye-off"}
+                                    size={24}
+                                    color="#666"
                                 />
                             </Pressable>
                         </BlurView>
-                        {dobError ? (
-                            <Text style={styles.errorText}>{dobError}</Text>
+                        {passwordError ? (
+                            <Text style={styles.errorText}>{passwordError}</Text>
                         ) : null}
                     </View>
 
-                    {showDatePicker && (
-                        <DateTimePicker
-                            value={date}
-                            mode="date"
-                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                            maximumDate={new Date()}
-                            onChange={onDateChange}
-                        />
-                    )}
-
-                    {/* GENDER DROPDOWN SECTION */}
+                    {/* CONFIRM PASSWORD */}
                     <View>
                         <BlurView intensity={20} style={globalStyles.inputWrapper}>
-                            <Dropdown
-                                style={styles.dropdown}
-                                placeholderStyle={styles.placeholderStyle}
-                                selectedTextStyle={styles.selectedTextStyle}
-                                containerStyle={styles.dropdownContainer}
-                                itemTextStyle={styles.itemText}
-                                data={genderData}
-                                maxHeight={300}
-                                labelField="label"
-                                valueField="value"
-                                placeholder={!isFocus ? 'Gender' : '...'}
-                                value={gender}
-                                onFocus={() => setIsFocus(true)}
-                                onBlur={() => setIsFocus(false)}
-                                onChange={item => {
-                                    setGender(item.value);
-                                    setGenderError(""); // Clear error when selected
-                                    setIsFocus(false);
-                                }}
+                            <TextInput
+                                placeholder="Confirm Password"
+                                placeholderTextColor="rgba(255,255,255,0.6)"
+                                style={[globalStyles.textInput, { flex: 1 }]}
+                                value={confirmPassword}
+                                onChangeText={handleConfirmPasswordInput}
+                                secureTextEntry={!showConfirmPassword}
+                                autoCapitalize="none"
+                                editable={!isLoading}
                             />
+                            <Pressable
+                                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                            >
+                                <MaterialCommunityIcons
+                                    name={showConfirmPassword ? "eye" : "eye-off"}
+                                    size={24}
+                                    color="#666"
+                                />
+                            </Pressable>
                         </BlurView>
-                        {genderError ? (
-                            <Text style={styles.errorText}>{genderError}</Text>
+                        {confirmPasswordError ? (
+                            <Text style={styles.errorText}>{confirmPasswordError}</Text>
                         ) : null}
                     </View>
 
+                    {/* Sign Up Button */}
                     <Pressable
-                        style={globalStyles.nextButton}
-                        onPress={handleNext}
+                        style={[styles.signUpButton, isLoading && styles.signUpButtonDisabled]}
+                        onPress={handleSignUp}
+                        disabled={isLoading}
                     >
-                        <Image
-                            source={require('../assets/images/next.png')}
-                            style={styles.buttonIcon}
-                            resizeMode="contain"
-                        />
+                        <LinearGradient
+                            colors={isLoading ? ['#999', '#666'] : ['#00ADF5', '#0066CC']}
+                            style={styles.signUpGradient}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#FFF" size="small" />
+                            ) : (
+                                <Text style={styles.signUpButtonText}>Sign Up</Text>
+                            )}
+                        </LinearGradient>
                     </Pressable>
+
+                    {/* Already have account */}
+                    <View style={styles.loginLinkContainer}>
+                        <Text style={styles.loginLinkText}>Already have an account? </Text>
+                        <Pressable onPress={() => router.push('.//(tabs)')} disabled={isLoading}>
+                            <Text style={styles.loginLink}>Log In</Text>
+                        </Pressable>
+                    </View>
                 </ScrollView>
             </SafeAreaView>
         </View>
@@ -492,12 +538,13 @@ const UserSignUp1 = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-    profileContainer: {
-        alignItems: 'center',
-        marginVertical: 20,
+    headerToggleLang: {
+        flexDirection: "row",
+        justifyContent: "flex-end",
+        alignItems: "center",
+        marginTop: 10,
+        marginBottom: 20
     },
-    headerToggleLang: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 10, marginBottom: 20 },
-
     langToggleContainer: {
         width: 104,
         height: 36,
@@ -505,102 +552,48 @@ const styles = StyleSheet.create({
         backgroundColor: "#FFF",
         overflow: "hidden",
         padding: 3,
-        marginBottom:20,
-       // alignItems: 'flex-end',
+        marginBottom: 20,
     },
-    toggleBackground: { flex: 1, flexDirection: "row" },
-    langButton: { flex: 1, justifyContent: "center", alignItems: "center", borderRadius: 15 },
-    langText: { fontSize: 12, fontWeight: "bold", color: "#888" },
-    activeToggleText: { color: "#FFF" },
-
+    toggleBackground: {
+        flex: 1,
+        flexDirection: "row"
+    },
+    langButton: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        borderRadius: 15
+    },
+    langText: {
+        fontSize: 12,
+        fontWeight: "bold",
+        color: "#888"
+    },
+    activeToggleText: {
+        color: "#FFF"
+    },
     inlineRoleToggle: {
         alignSelf: "center",
-        width: 180,
-        height: 35,
+        width: 220,
+        height: 40,
         borderRadius: 25,
         backgroundColor: "#FFF",
         overflow: "hidden",
         padding: 2,
-        marginBottom:10
-
+        marginBottom: 30,
+        marginTop: 10,
     },
-    toggleButton: { flex: 1, justifyContent: "center", alignItems: "center", borderRadius: 25},
-    toggleText: { fontSize: 14, fontWeight: "bold", color: "#888", zIndex: 1 },
-
-    imageCircle: {
-        width: 110,
-        height: 110,
-        borderRadius: 55,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFF',
-        position: 'relative',
-    },
-    profileImg: {
-        width: 110,
-        height: 110,
-        borderRadius: 55,
-    },
-    placeholderImg: {
-        width: 60,
-        height: 60,
-        tintColor: '#FFF',
-    },
-    addIconContainer: {
-        position: 'absolute',
-        bottom: 5,
-        right: 5,
-        backgroundColor: '#00ADF5',
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFF',
-    },
-    addIconText: {
-        color: '#FFF',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginTop: -2,
-    },
-    textInputStyle: {
+    toggleButton: {
         flex: 1,
-        color: "#fff",
-        paddingLeft: 15,
-        fontSize: 15,
-        fontWeight: "900",
+        justifyContent: "center",
+        alignItems: "center",
+        borderRadius: 25
     },
-    dropdown: {
-        width: '100%',
-        paddingHorizontal: 15,
-        flex: 1,
-        height: 50,
-    },
-    dropdownContainer: {
-        backgroundColor: '#015bd4',
-        borderRadius: 15,
-        borderWidth: 0,
-    },
-    placeholderStyle: {
-        fontSize: 16,
-        color: 'rgba(255,255,255,0.6)',
-    },
-    selectedTextStyle: {
-        fontSize: 16,
-        color: '#fff',
-    },
-    itemText: {
-        color: '#FFF',
+    toggleText: {
         fontSize: 14,
-    },
-    buttonIcon: {
-        width: 30,
-        height: 30,
-        tintColor: '#FFF',
+        fontWeight: "bold",
+        color: "#888",
+        zIndex: 1
     },
     errorText: {
         color: '#FF4B4B',
@@ -609,6 +602,73 @@ const styles = StyleSheet.create({
         marginLeft: 20,
         marginBottom: 10,
         fontWeight: '600',
+    },
+    eyeIcon: {
+        fontSize: 22,
+        paddingHorizontal: 10,
+    },
+    signUpButton: {
+        marginTop: 30,
+        marginHorizontal: 20,
+        borderRadius: 30,
+        overflow: 'hidden',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+    },
+    signUpButtonDisabled: {
+        opacity: 0.7,
+    },
+    signUpGradient: {
+        paddingVertical: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    signUpButtonText: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    loginLinkContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginTop: 20,
+    },
+    loginLinkText: {
+        color: '#FFF',
+        fontSize: 14,
+    },
+    loginLink: {
+        color: '#00ADF5',
+        fontSize: 14,
+        fontWeight: 'bold',
+        textDecorationLine: 'underline',
+    },
+    comingSoonContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 40,
+    },
+    comingSoonTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#FFF',
+        marginBottom: 20,
+    },
+    comingSoonText: {
+        fontSize: 36,
+        fontWeight: 'bold',
+        color: '#00ADF5',
+        marginBottom: 10,
+    },
+    comingSoonSubtext: {
+        fontSize: 16,
+        color: 'rgba(255,255,255,0.8)',
+        textAlign: 'center',
+        lineHeight: 24,
     },
 });
 

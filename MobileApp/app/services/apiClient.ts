@@ -1,10 +1,11 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // --- CONFIGURATION ---
 // 1. REPLACE THIS with the IP you found in Step 1
 // This is safe for dev because it's a local address.
-const LAPTOP_IP = '192.168.1.3'; //
+const LAPTOP_IP = '10.31.18.97'; //
 
 // 2. LOGIC:
 // - Android Emulator uses '10.0.2.2' (special alias for host loopback).
@@ -23,5 +24,18 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
     }
 });
+
+apiClient.interceptors.request.use(
+    async (config) => {
+        const token = await AsyncStorage.getItem('auth_token');
+        if(token){
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+)
 
 export default apiClient;
