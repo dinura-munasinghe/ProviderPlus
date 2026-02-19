@@ -6,6 +6,7 @@ class UserSignupRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    phone_number: str
     # we allow role here, but we will validate it strictly in the service
     role: UserRole = UserRole.CUSTOMER
 
@@ -21,3 +22,8 @@ class TokenResponse(BaseModel):
     user_id: str
     role: str
     user_name: str
+    is_new_user: bool = False
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str

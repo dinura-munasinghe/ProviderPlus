@@ -2,6 +2,11 @@ from fastapi import HTTPException, status
 from ..models.user_model import User, UserRole
 from ..schemas.auth_schemas import UserSignupRequest, TokenResponse
 from ..core.security import get_password_hash, verify_password, create_access_token
+from google.oauth2 import id_token
+from google.auth.transport import requests
+import os
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_WEB_CLIENT_ID", "")
 
 
 async def register_new_user(user_data: UserSignupRequest) -> TokenResponse:
@@ -31,6 +36,7 @@ async def register_new_user(user_data: UserSignupRequest) -> TokenResponse:
         email=user_data.email,
         password_hash=hashed_pwd,
         full_name=user_data.full_name,
+        phone_number = user_data.phone_number,
         role=user_data.role
     )
 
@@ -77,3 +83,84 @@ async def authenticate_user(email: str, password: str):
         role=user.role,
         user_name=user.full_name
     )
+
+
+async def google_login(id_token_string: str) -> TokenResponse:
+    """
+    Verify google ID token and login/signup user
+
+    1. verify  token with ggoogle
+    2. extract user info (email, name)
+    3. check if user exists
+    4. if exists, login
+    5. if not, create a new account
+    6. return a JWT token
+    """
+
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            id_token_string,
+            requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+        email = idinfo.get('email')
+        name = idinfo.get('name')
+        google_user_id = idinfo.get('sub')
+
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email not provided by Google"
+            )
+
+        existing_user = await User.find_one(User.email == email)
+
+        if existing_user:
+            access_token = create_access_token(
+                data={"sub": str(existing_user.id), "role": existing_user.role}
+            )
+            return TokenResponse(
+                access_token=access_token,
+                token_type="bearer",
+                user_id=str(existing_user.id),
+                role=existing_user.role,
+                user_name=existing_user.full_name,
+                is_new_user=False
+            )
+
+        else:
+            new_user = User(
+                email=email,
+                password_hash="GOOGLE_AUTH",
+                full_name=name or email.split('@')[0],
+                phone_number=None,
+                role=UserRole.CUSTOMER
+            )
+
+        await new_user.insert()
+
+        access_token = create_access_token(
+            data={"sub": str(new_user.id), "role": new_user.role}
+        )
+
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user_id=str(new_user.id),
+            role=new_user.role,
+            user_name=new_user.full_name,
+            is_new_user=True
+        )
+
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid google token {str(e)}"
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Google authentication failed {str(e)}"
+        )
