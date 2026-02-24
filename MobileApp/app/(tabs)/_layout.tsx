@@ -208,6 +208,20 @@ export default function TabLayout() {
         }}
       />
 
+      {/* 2. testing dash */}
+            <Tabs.Screen
+              name="dash"
+              listeners={() => ({
+                tabPress: (e) => {
+                  e.preventDefault();
+                  router.push('/ProviderDash');
+                },
+              })}
+              options={{
+                title: 'DASH',
+              }}
+            />
+
       {/* 3. ALERTS */}
       <Tabs.Screen
         name="Alerts"
