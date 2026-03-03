@@ -4,6 +4,7 @@ from app.routes import chatbot_routes, analysis_routes, auth_routes, provider_ro
 from app.core.database import init_db
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from app.routes.dashboard_routes import router as dashboard_router
 
 
 # DB startup/shutdown logic
@@ -51,4 +52,6 @@ app.include_router(provider_routes.router, prefix="/api/category-search")
 @app.get("/")
 def read_root():
     return {"message: Provider+ backend is running!"}
+
+app.include_router(dashboard_router)
 
