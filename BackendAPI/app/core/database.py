@@ -55,4 +55,7 @@ async def init_db():
         print("An unexpected error occurred.")
         raise e
 
-    print("MongoDB connection established")
+    print("✅ MongoDB connection established")
+
+    # Return database for GridFS initialization
+    return database
