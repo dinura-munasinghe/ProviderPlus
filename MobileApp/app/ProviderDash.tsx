@@ -19,7 +19,7 @@ import {
   DEFAULT_DASHBOARD_DATA,
   fetchAIOverview,
   fetchDashboardData,
-} from './services/Dashboardservice.ts';
+} from './services/dashboardService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
