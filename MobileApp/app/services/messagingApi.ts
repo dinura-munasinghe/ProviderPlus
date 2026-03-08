@@ -68,3 +68,47 @@ export const registerPushToken = async(expoPushToken: string): Promise<void> => 
     });
 };
 
+
+// APPOINTMENT ANALYSIS
+
+export interface AppointmentDetails {
+    found: boolean;
+    date?: string;       // YYYY-MM-DD
+    time?: string;       // e.g. "03:00 PM"
+    summary?: string;    // short description of the job
+}
+
+/**
+ * sends the full chat history to the AI for analysis
+ * returns extracted appointment details (date, time, job summary)
+ * called when the user taps the Confirm button
+ */
+export const analyzeAppointment = async (messages: string): Promise<AppointmentDetails> => {
+    const response = await apiClient.post('/ai-integration/analyze-appointment', { messages });
+    return response.data;
+};
+
+// BOOKINGS
+
+export interface BookingPayload {
+    conversation_id: string;
+    provider_id: string;
+    date: string;        // YYYY-MM-DD
+    time: string;        // HH:MM (24hr)
+    summary: string;
+}
+
+export interface BookingResponse {
+    booking_id: string;
+    status: string;
+}
+
+/**
+ * creates a booking in the backend
+ * called when the user taps "Finalize Booking" in the chat modal
+ * returns booking_id and payment details to redirect to the payment screen
+ */
+export const createBooking = async (payload: BookingPayload): Promise<BookingResponse> => {
+    const response = await apiClient.post('/messaging/booking', payload);
+    return response.data;
+};

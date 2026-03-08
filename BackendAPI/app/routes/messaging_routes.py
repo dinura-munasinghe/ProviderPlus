@@ -7,8 +7,10 @@ from ..core.websocket_manager import manager
 from ..services.messaging_service import MessagingService
 from ..schemas.conversation_schemas import ConversationCreate, ConversationResponse
 from ..schemas.message_schemas import MessageCreate, MessageReadUpdate, PushTokenRegister
+from ..schemas.booking_schemas import BookingResponse, BookingCreate
 from ..models.user_model import User
 from ..models.conversation_model import Conversation
+from ..models.booking_model import Booking, BookingStatus
 
 from ..core.security import SECRET_KEY, ALGORITHM
 
@@ -234,3 +236,30 @@ async def websocket_endpoint(
         # Step 6 — User left or lost connection — mark them offline
         manager.disconnect(sender_id)
         print(f"[WS] {sender_id} disconnected from conversation {conversation_id}")
+
+
+@router.post("/booking/")
+async def store_booking_details(
+        data: BookingCreate,
+        current_user: User = Depends(get_current_user)
+):
+    """
+    called when the user taps finalize booking in the chat modal
+    saves the booking to mongodb and returns a booking_id
+    so the  frontend can navigate to the payment screen
+    """
+
+    booking = Booking(
+        user_id=str(current_user.id),
+        provider_id=data.provider_id,
+        conversation_id=data.conversation_id,
+        date=data.date,
+        time=data.time,
+        summary=data.summary,
+        status=BookingStatus.pending
+    )
+
+    return BookingResponse(
+        booking_id=str(booking.id),
+        status=booking.status,
+    )
