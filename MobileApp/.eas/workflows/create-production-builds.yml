@@ -1,7 +1,21 @@
 name: Create Production Builds
 
+# This section tells GitHub WHEN to run the pipeline
+on:
+  push:
+    branches:
+      - main
+      - dev  # Added to ensure your current work triggers the build
+  pull_request:
+    branches:
+      - main
+      - dev
+
+# This section tells EAS WHAT to do
 jobs:
   build_android:
-    type: build # This job type creates a production build for Android
+    name: Build Android Production
+    type: build
     params:
       platform: android
+      profile: production
