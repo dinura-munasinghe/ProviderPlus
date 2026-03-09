@@ -51,7 +51,19 @@
           }
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://repo1.maven.org/maven2"
+            ]
+          }
+        }
+      ],
+      "./plugins/withStripeFix",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

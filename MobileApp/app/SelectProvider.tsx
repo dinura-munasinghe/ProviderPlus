@@ -20,22 +20,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 // @ts-ignore
 import { fetchProvidersByCategory, Provider } from './services/providerService';
+import {provider} from "@expo/config-plugins/build/plugins/createBaseMod";
 
 const { width } = Dimensions.get('window');
-
-// 1. DATA INTERFACE
-interface Provider {
-    _id: string; // MongoDB ID
-    name: string;
-    category: {
-        name: string;
-        slug: string;
-        icon: string;
-    };
-    rating: number;
-    description: string;
-}
-
 
 // 2. CARD COMPONENT
 const Card = ({ item }: { item: Provider }) => {
@@ -67,7 +54,10 @@ const Card = ({ item }: { item: Provider }) => {
 
                     <TouchableOpacity
                         style={styles.viewProfileBtn}
-                        onPress={() => router.push('./Chat')}
+                        onPress={() => router.push({
+                            pathname: '/ProviderProfile',
+                            params: {id: item._id}
+                        })}
                     >
                         <Text style={styles.viewProfileText}>View Profile</Text>
                     </TouchableOpacity>

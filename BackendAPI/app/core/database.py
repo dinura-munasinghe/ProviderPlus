@@ -11,6 +11,8 @@ from ..models.category_model import Category
 from ..models.push_token_model import PushToken
 from ..models.message_model import Message
 from ..models.conversation_model import Conversation
+from ..models.booking_model import Booking
+
 
 # function that connects the app with MongoDB
 async def init_db():
@@ -41,7 +43,8 @@ async def init_db():
                 Category,
                 Conversation,
                 Message,
-                PushToken
+                PushToken,
+                Booking,
             ]
         )
     # handling relevant errors
@@ -55,4 +58,7 @@ async def init_db():
         print("An unexpected error occurred.")
         raise e
 
-    print("MongoDB connection established")
+    print("✅ MongoDB connection established")
+
+    # Return database for GridFS initialization
+    return database
