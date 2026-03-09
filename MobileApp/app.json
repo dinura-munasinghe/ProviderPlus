@@ -62,7 +62,8 @@
           }
         }
       ],
-      "./plugins/withStripeFix"
+      "./plugins/withStripeFix",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -127,6 +127,7 @@ app.include_router(payment_routes.router, prefix="/api/payment", tags=["Payment"
 
 # Messaging Routes
 app.include_router(messaging_routes.router, prefix="/api", tags=["Messaging"])
+app.include_router(dashboard_router)
 
 
 # ==================== ROOT ENDPOINT ====================
@@ -135,5 +136,4 @@ app.include_router(messaging_routes.router, prefix="/api", tags=["Messaging"])
 def read_root():
     return {"message: Provider+ backend is running!"}
 
-app.include_router(dashboard_router)
 

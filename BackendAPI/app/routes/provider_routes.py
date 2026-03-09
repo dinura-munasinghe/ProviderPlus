@@ -41,6 +41,40 @@ async def get_category_names_endpoint():
 
     return names
 
+@router.get("/provider/{provider_id}")
+async def get_provider_by_id(provider_id: str):
+    """
+    Returns public profile for a single provider.
+    Frontend: GET /api/providers/{provider_id}
+    """
+    try:
+        provider = await Provider.get(provider_id)
+    except Exception:
+        provider = None
+
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    category = await provider.category.fetch()
+
+    return {
+        "id": str(provider.id),
+        "name": provider.name,
+        "description": provider.description,
+        "is_verified": provider.is_verified,
+        "rating": provider.rating,
+        "tags": provider.tags or [],
+        "profile_image": provider.profile_image,
+        "portfolio_images": provider.portfolio_images or [],
+        "phone_number": provider.phone_number,
+        "category": {
+            "id": str(category.id),
+            "name": category.name,
+            "slug": category.slug,
+        },
+    }
+
+
 
 # ── Provider Dashboard Stats ──────────────────────────────────
 
