@@ -332,7 +332,7 @@ const UserLogin: React.FC = () => {
                             {/* SIGN UP LINK */}
                             <Pressable
                                 style={styles.signupTextContainer}
-                                onPress={() => router.push('/UserSignUp')}
+                                onPress={() => router.push(userRole === 'provider' ? '../ProviderSignUp' : '../UserSignUp')}
                                 disabled={isLoading}
                             >
                                 <Text style={styles.signupText}>{strings.signup}</Text>
@@ -348,7 +348,7 @@ const UserLogin: React.FC = () => {
 const styles = StyleSheet.create({
     mainContainer: { flex: 1 },
     safeArea: { flex: 1, zIndex: 1 },
-    scrollContent: { paddingHorizontal: 24, paddingBottom: 40, paddingTop: 10 },
+    scrollContent: { paddingHorizontal: 24, paddingBottom: 100, paddingTop: 10 },
     header: { flexDirection: "row", justifyContent: "flex-start", alignItems: "center", marginTop: 10, marginBottom: 20 },
     langToggleContainer: {
         width: 104,
