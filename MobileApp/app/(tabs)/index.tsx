@@ -7,7 +7,6 @@ import {
   TextInput,
   TouchableOpacity,
   Dimensions,
-  Switch,
   ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,62 +19,12 @@ import { fetchAllCategories } from '../services/categoryService';
 
 const { width, height } = Dimensions.get('window');
 
-const TRANSLATIONS = {
-  en: {
-    searchPlaceholder: 'Who Are You Looking For?',
-    searchYourself: 'SEARCH YOURSELF',
-    letUsPlan: 'LET US PLAN',
-    swipeUp: 'SWIPE UP FOR CATEGORIES',
-    categoriesTitle: 'SERVICE PROVIDER CATEGORIES',
-    categories: {
-      'DJ Artist': 'DJ Artist',
-      'Event Planner': 'Event Planner',
-      'Plumber': 'Plumber',
-      'Beautician': 'Beautician',
-      'Electrician': 'Electrician',
-      'Catering': 'Catering',
-      'Photography': 'Photography',
-      'LED Wall Provider': 'LED Wall Provider',
-      'Sound System': 'Sound System',
-      'Decoration': 'Decoration',
-      'Videography': 'Videography',
-      'Florist': 'Florist',
-      'Transportation': 'Transportation',
-    }
-  },
-  si: {
-    searchPlaceholder: 'ඔබ කාව සොයනවාද?',
-    searchYourself: 'ඔබම සොයන්න',
-    letUsPlan: 'අපි සැලසුම් කරමු',
-    swipeUp: 'කාණ්ඩ සඳහා ඉහළට ස්වයිප් කරන්න',
-    categoriesTitle: 'සේවා සපයන්නන්ගේ කාණ්ඩ',
-    categories: {
-      'DJ Artist': 'DJ කලාකරු',
-      'Event Planner': 'උත්සව සැලසුම්කරු',
-      'Plumber': 'ජලනල කාර්මිකයා',
-      'Beautician': 'රූපලාවන්‍ය ශිල්පියා',
-      'Electrician': 'විදුලි කාර්මිකයා',
-      'Catering': 'ආහාර සේවාව',
-      'Photography': 'ඡායාරූපකරණය',
-      'LED Wall Provider': 'LED තිර සපයන්නා',
-      'Sound System': 'ශබ්ද පද්ධතිය',
-      'Decoration': 'සැරසිලි',
-      'Videography': 'වීඩියෝ රූපකරණය',
-      'Florist': 'මල් අලෙවිකරු',
-      'Transportation': 'ප්‍රවාහනය',
-    }
-  }
-};
-
 export default function HomeScreen() {
   const router = useRouter();
-  const [isSinhala, setIsSinhala] = useState(false);
   const [isAiMode, setIsAiMode] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
-
-  const t = isSinhala ? TRANSLATIONS.si : TRANSLATIONS.en;
 
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['12%', '75%'], []);
@@ -134,16 +83,7 @@ export default function HomeScreen() {
             {/* --- TOP BAR --- */}
             <View style={styles.topBar}>
               <View style={{ width: 50 }} />
-              <View style={styles.langContainer}>
-                <Text style={styles.langText}>ENG | සිං</Text>
-                <Switch
-                    trackColor={{ false: "#767577", true: "#E37322" }}
-                    thumbColor={"#f4f3f4"}
-                    onValueChange={() => setIsSinhala(!isSinhala)}
-                    value={isSinhala}
-                    style={{ transform: [{ scaleX: .7 }, { scaleY: .7 }] }}
-                />
-              </View>
+              <View style={{ width: 50 }} />
             </View>
 
             {/* --- MAIN CONTENT AREA --- */}
@@ -159,7 +99,7 @@ export default function HomeScreen() {
               <Animated.View style={[styles.searchWrapper, searchBarAnimatedStyle]}>
                 <View style={styles.searchBar}>
                   <TextInput
-                      placeholder={t.searchPlaceholder}
+                      placeholder={'Who Are You Looking For?'}
                       placeholderTextColor="rgba(255,255,255,0.7)"
                       style={styles.searchInput}
                   />
@@ -177,7 +117,7 @@ export default function HomeScreen() {
                       onPress={() => setIsAiMode(false)}
                   >
                     <Text style={[styles.toggleText, !isAiMode && styles.activeBlueText]}>
-                      {t.searchYourself}
+                      {'SEARCH YOURSELF'}
                     </Text>
                   </TouchableOpacity>
 
@@ -186,7 +126,7 @@ export default function HomeScreen() {
                       onPress={() => router.push('/AiPage')}
                   >
                     <Text style={[styles.toggleText, isAiMode && styles.activeWhiteText]}>
-                      {t.letUsPlan}
+                      {'LET US PLAN'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -199,7 +139,7 @@ export default function HomeScreen() {
                 pointerEvents={sheetExpanded ? 'none' : 'auto'}
             >
               <Text style={styles.arrowText}>^</Text>
-              <Text style={styles.swipeText}>{t.swipeUp}</Text>
+              <Text style={styles.swipeText}>{'SWIPE UP FOR CATEGORIES'}</Text>
             </Animated.View>
 
             {/* --- BOTTOM SHEET --- */}
@@ -218,7 +158,7 @@ export default function HomeScreen() {
                   contentContainerStyle={styles.sheetContent}
                   showsVerticalScrollIndicator={false}
               >
-                <Text style={styles.sheetTitle}>{t.categoriesTitle}</Text>
+                <Text style={styles.sheetTitle}>{'SERVICE PROVIDER CATEGORIES'}</Text>
 
                 {loadingCategories ? (
                     <ActivityIndicator size="large" color="#0072FF" style={{ marginTop: 20 }} />
@@ -241,7 +181,7 @@ export default function HomeScreen() {
                           >
                             <Text style={{ fontSize: 32 }}>{cat.icon}</Text>
                             <Text style={styles.cardText}>
-                              {t.categories[cat.name as keyof typeof t.categories] || cat.name}
+                              {cat.name}
                             </Text>
                           </TouchableOpacity>
                       ))}
@@ -268,8 +208,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     zIndex: 20,
   },
-  langContainer: { flexDirection: 'row', alignItems: 'center' },
-  langText: { color: 'white', fontWeight: '700', marginRight: 5 },
   contentContainer: { alignItems: 'center', marginTop: 60, zIndex: 10 },
   logoWrapper: {
     width: 100,
