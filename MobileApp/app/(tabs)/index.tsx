@@ -7,7 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Switch
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -26,9 +27,14 @@ export default function HomeScreen() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
+  const [hasUnreadAlerts, setHasUnreadAlerts] = useState(true);
+
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['12%', '75%'], []);
   const animatedIndex = useSharedValue(0);
+
+  const [isSinhala, setIsSinhala] = useState(false);
+  const toggleLanguage = () => setIsSinhala(prev => !prev);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -83,8 +89,31 @@ export default function HomeScreen() {
             {/* --- TOP BAR --- */}
             <View style={styles.topBar}>
               <View style={{ width: 50 }} />
-              <View style={{ width: 50 }} />
+              <View style={styles.topBarRight}>
+
+              <View style={styles.languageToggle}>
+              <Text style={[styles.langLabel, !isSinhala && styles.langLabelActive]}>ENG</Text>
+              <Text style={styles.langDivider}>|</Text>
+              <Text style={[styles.langLabel, isSinhala && styles.langLabelActive]}>සිං</Text>
+              <Switch
+                value={isSinhala}
+                onValueChange={toggleLanguage}
+                trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#FF6B35' }}
+                thumbColor={isSinhala ? '#fff' : '#f0f0f0'}
+                ios_backgroundColor="rgba(255,255,255,0.3)"
+                style={styles.switchStyle}
+              />
             </View>
+              <TouchableOpacity
+                style={styles.bellButton}
+                onPress={() => router.push('Alerts')}
+              >
+                <Text style={styles.bellIcon}>🔔</Text>
+                {hasUnreadAlerts && <View style={styles.redDot}/>}
+              </TouchableOpacity>
+            </View>
+            </View>
+
 
             {/* --- MAIN CONTENT AREA --- */}
             <View style={styles.contentContainer}>
@@ -216,6 +245,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 30,
   },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  languageToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  langLabel: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  langLabelActive: {
+    color: '#fff',
+  },
+  langDivider: {
+    color: 'rgba(255,255,255,0.4)',
+    marginHorizontal: 6,
+    fontSize: 12,
+  },
+  switchStyle: {
+    marginLeft: 6,
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
+  },
+bellButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bellIcon: {
+    fontSize: 18,
+  },
+  redDot: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: '#FF3B30',
+      borderWidth: 1.5,
+      borderColor: 'rgba(255,255,255,0.15)',
+    },
   logoImage: { width: '100%', height: '100%' },
   searchWrapper: { marginTop: 30 },
   searchBar: {
