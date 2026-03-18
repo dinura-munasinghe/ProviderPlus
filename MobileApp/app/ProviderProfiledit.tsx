@@ -1,13 +1,4 @@
-/**
- * ProviderProfiledit.tsx
- * Provider+ App — Provider Profile Editing Screen
- * with Map-based Company Location Picker
- *
- * Required packages (run once, then rebuild):
- *   npx expo install expo-image-picker expo-document-picker expo-location react-native-maps
- */
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,17 +15,13 @@ import {
   StatusBar,
   SafeAreaView,
   Alert,
-  ActivityIndicator,
-  Dimensions,
 } from 'react-native';
-import { Ionicons, Feather, AntDesign, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Location from 'expo-location';
-import MapView, { Marker, MapPressEvent, Region } from 'react-native-maps';
-import { router } from 'expo-router';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { router, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LOCATION_PICKER_RESULT_KEY } from './LocationPicker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,9 +36,10 @@ interface WorkItem {
   description: string;
 }
 
-interface LatLng {
+interface SelectedLocation {
   latitude: number;
   longitude: number;
+  address: string;
 }
 
 interface InputFieldProps {
@@ -118,198 +106,6 @@ const PREDEFINED_SKILLS: string[] = [
   'Landscaping', 'HVAC', 'Cleaning', 'Security',
   'IT Support', 'Networking', 'CCTV', 'Solar Panels',
 ];
-
-// Default map region — centered on Sri Lanka
-const DEFAULT_REGION: Region = {
-  latitude: 7.8731,
-  longitude: 80.7718,
-  latitudeDelta: 3.5,
-  longitudeDelta: 3.5,
-};
-
-// ─── Map Location Picker Modal ────────────────────────────────────────────────
-
-interface LocationPickerModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onConfirm: (address: string, coords: LatLng) => void;
-  initialCoords?: LatLng | null;
-}
-
-const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
-  visible,
-  onClose,
-  onConfirm,
-  initialCoords,
-}) => {
-  const mapRef = useRef<MapView>(null);
-  const [selectedCoords, setSelectedCoords] = useState<LatLng | null>(initialCoords ?? null);
-  const [address, setAddress] = useState<string>('');
-  const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
-  const [isLocating, setIsLocating] = useState<boolean>(false);
-
-  const reverseGeocode = async (coords: LatLng): Promise<void> => {
-    setIsGeocoding(true);
-    try {
-      const results = await Location.reverseGeocodeAsync({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-      });
-      if (results.length > 0) {
-        const r = results[0];
-        const parts = [r.name, r.street, r.city, r.region, r.country].filter(Boolean);
-        setAddress(parts.join(', '));
-      } else {
-        setAddress(`${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
-      }
-    } catch {
-      setAddress(`${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
-
-  const handleMapPress = async (e: MapPressEvent): Promise<void> => {
-    const coords = e.nativeEvent.coordinate;
-    setSelectedCoords(coords);
-    await reverseGeocode(coords);
-  };
-
-  const handleUseMyLocation = async (): Promise<void> => {
-    setIsLocating(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required to use this feature.');
-        setIsLocating(false);
-        return;
-      }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const coords: LatLng = {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      };
-      setSelectedCoords(coords);
-      await reverseGeocode(coords);
-      mapRef.current?.animateToRegion(
-        { ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-        600
-      );
-    } catch {
-      Alert.alert('Error', 'Could not get your location. Please try again.');
-    } finally {
-      setIsLocating(false);
-    }
-  };
-
-  const handleConfirm = (): void => {
-    if (!selectedCoords) {
-      Alert.alert('No Location', 'Please tap on the map or use your current location.');
-      return;
-    }
-    onConfirm(address, selectedCoords);
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={mapStyles.container}>
-        <StatusBar barStyle="dark-content" />
-
-        {/* Map Header */}
-        <SafeAreaView style={mapStyles.headerSafe}>
-          <View style={mapStyles.header}>
-            <TouchableOpacity onPress={onClose} style={mapStyles.headerBtn}>
-              <Ionicons name="close" size={22} color="#1A1A2E" />
-            </TouchableOpacity>
-            <Text style={mapStyles.headerTitle}>Select Location</Text>
-            <View style={{ width: 38 }} />
-          </View>
-        </SafeAreaView>
-
-        {/* Hint banner */}
-        <View style={mapStyles.hintBanner}>
-          <Ionicons name="information-circle-outline" size={15} color={COLORS.accentLight} />
-          <Text style={mapStyles.hintText}>Tap anywhere on the map to pin your location</Text>
-        </View>
-
-        {/* Map */}
-        <MapView
-          ref={mapRef}
-          style={mapStyles.map}
-          initialRegion={
-            initialCoords
-              ? { ...initialCoords, latitudeDelta: 0.01, longitudeDelta: 0.01 }
-              : DEFAULT_REGION
-          }
-          onPress={handleMapPress}
-          showsUserLocation
-          showsMyLocationButton={false}
-          showsCompass
-        >
-          {selectedCoords && (
-            <Marker
-              coordinate={selectedCoords}
-              title="Company Location"
-              pinColor={COLORS.accent}
-            />
-          )}
-        </MapView>
-
-        {/* Use My Location floating button */}
-        <TouchableOpacity
-          style={mapStyles.myLocationBtn}
-          onPress={handleUseMyLocation}
-          activeOpacity={0.85}
-          disabled={isLocating}
-        >
-          {isLocating ? (
-            <ActivityIndicator size="small" color={COLORS.accent} />
-          ) : (
-            <>
-              <MaterialIcons name="my-location" size={20} color={COLORS.accent} />
-              <Text style={mapStyles.myLocationText}>Use My Location</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Bottom sheet */}
-        <View style={mapStyles.bottomSheet}>
-          <View style={mapStyles.addressRow}>
-            <View style={mapStyles.addressIconWrap}>
-              <Ionicons name="location" size={20} color={COLORS.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={mapStyles.addressLabel}>Selected Location</Text>
-              {isGeocoding ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <ActivityIndicator size="small" color={COLORS.accentLight} />
-                  <Text style={mapStyles.addressResolving}>Resolving address…</Text>
-                </View>
-              ) : selectedCoords ? (
-                <Text style={mapStyles.addressText} numberOfLines={2}>
-                  {address || `${selectedCoords.latitude.toFixed(5)}, ${selectedCoords.longitude.toFixed(5)}`}
-                </Text>
-              ) : (
-                <Text style={mapStyles.addressPlaceholder}>No location selected yet</Text>
-              )}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[mapStyles.confirmBtn, !selectedCoords && mapStyles.confirmBtnDisabled]}
-            onPress={handleConfirm}
-            activeOpacity={0.85}
-            disabled={!selectedCoords || isGeocoding}
-          >
-            <Ionicons name="checkmark-circle" size={20} color="#fff" />
-            <Text style={mapStyles.confirmBtnText}>Confirm Location</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -469,7 +265,11 @@ const WorkCard: React.FC<WorkCardProps> = ({ index, work, onChange, onRemove }) 
       </TouchableOpacity>
 
       {work.attachments.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentPreviewRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.attachmentPreviewRow}
+        >
           {work.attachments.map((file, fi) => (
             <View key={fi} style={styles.attachmentChip}>
               <Feather name="file" size={12} color={COLORS.accentLight} />
@@ -508,30 +308,56 @@ const WorkCard: React.FC<WorkCardProps> = ({ index, work, onChange, onRemove }) 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderProfiledit(): React.JSX.Element {
-  const [name, setName] = useState<string>('Nimal Chandra');
-  const [email, setEmail] = useState<string>('nimalC@gmail.com');
-  const [contact, setContact] = useState<string>('');
-  const [nic, setNic] = useState<string>('');
+  // Personal Info
+  const [name, setName]               = useState<string>('');
+  const [email, setEmail]             = useState<string>('');
+  const [contact, setContact]         = useState<string>('');
+  const [nic, setNic]                 = useState<string>('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
-  const [category, setCategory] = useState<string>('');
+  // Service Info
+  const [category, setCategory]                     = useState<string>('');
   const [categoryModalVisible, setCategoryModalVisible] = useState<boolean>(false);
   const [serviceDescription, setServiceDescription] = useState<string>('');
 
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [customSkills, setCustomSkills] = useState<string[]>([]);
+  // Skills
+  const [selectedSkills, setSelectedSkills]     = useState<string[]>([]);
+  const [customSkills, setCustomSkills]         = useState<string[]>([]);
   const [customSkillInput, setCustomSkillInput] = useState<string>('');
-  const [showSkillInput, setShowSkillInput] = useState<boolean>(false);
+  const [showSkillInput, setShowSkillInput]     = useState<boolean>(false);
 
-  const [companyLocation, setCompanyLocation] = useState<string>('');
-  const [companyCoords, setCompanyCoords] = useState<LatLng | null>(null);
-  const [locationModalVisible, setLocationModalVisible] = useState<boolean>(false);
+  // Company Location — read back from AsyncStorage after LocationPicker returns
+  const [location, setLocation] = useState<SelectedLocation | null>(null);
 
+  // BR Number
   const [brNumber, setBrNumber] = useState<string>('');
 
+  // Work Portfolio
   const [works, setWorks] = useState<WorkItem[]>([
     { name: '', attachments: [], description: '' },
   ]);
+
+  // ── Read LocationPicker result when this screen comes back into focus ───────
+  // This is the exact same pattern used in ProviderSignUp
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const raw = await AsyncStorage.getItem(LOCATION_PICKER_RESULT_KEY);
+          if (raw) {
+            const parsed: SelectedLocation = JSON.parse(raw);
+            setLocation(parsed);
+            // Clear the key so it doesn't re-apply on the next focus
+            await AsyncStorage.removeItem(LOCATION_PICKER_RESULT_KEY);
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      })();
+    }, [])
+  );
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handlePickProfileImage = async (): Promise<void> => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -579,11 +405,6 @@ export default function ProviderProfiledit(): React.JSX.Element {
   const removeWork = (index: number): void =>
     setWorks((prev) => prev.filter((_, i) => i !== index));
 
-  const handleLocationConfirm = (address: string, coords: LatLng): void => {
-    setCompanyLocation(address);
-    setCompanyCoords(coords);
-  };
-
   const handleEditDetails = (): void => {
     if (!name.trim() || !email.trim()) {
       Alert.alert('Missing Info', 'Please fill in your name and email.');
@@ -591,6 +412,8 @@ export default function ProviderProfiledit(): React.JSX.Element {
     }
     Alert.alert('Profile Updated', 'Your provider profile has been saved successfully!');
   };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -622,7 +445,11 @@ export default function ProviderProfiledit(): React.JSX.Element {
           keyboardShouldPersistTaps="handled"
         >
           {/* Avatar */}
-          <TouchableOpacity style={styles.avatarWrapper} onPress={handlePickProfileImage} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.avatarWrapper}
+            onPress={handlePickProfileImage}
+            activeOpacity={0.85}
+          >
             {profileImage ? (
               <Image source={{ uri: profileImage }} style={styles.avatar} />
             ) : (
@@ -649,6 +476,7 @@ export default function ProviderProfiledit(): React.JSX.Element {
           {/* Service Information */}
           <SectionHeader title="Service Information" />
 
+          {/* Category Dropdown */}
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => setCategoryModalVisible(true)}
@@ -660,6 +488,7 @@ export default function ProviderProfiledit(): React.JSX.Element {
             <Ionicons name="chevron-down" size={18} color={COLORS.textMuted} />
           </TouchableOpacity>
 
+          {/* Service Description */}
           <View style={styles.card}>
             <Text style={styles.inputLabel}>Service Description</Text>
             <TextInput
@@ -727,69 +556,32 @@ export default function ProviderProfiledit(): React.JSX.Element {
             )}
           </View>
 
-          {/* Company Location — Map Picker */}
-          <Text style={styles.fieldSectionLabel}>Company Location</Text>
+          {/* ── Company Location — uses existing LocationPicker screen ── */}
           <TouchableOpacity
-            style={styles.locationPickerBtn}
-            onPress={() => setLocationModalVisible(true)}
+            style={styles.locationField}
+            onPress={() => router.push('./LocationPicker')}
             activeOpacity={0.8}
           >
-            <View style={styles.locationPickerLeft}>
-              <View style={styles.locationIconCircle}>
-                <Ionicons name="location" size={18} color={COLORS.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                {companyLocation ? (
-                  <>
-                    <Text style={styles.locationSetLabel}>Location Set</Text>
-                    <Text style={styles.locationAddress} numberOfLines={2}>
-                      {companyLocation}
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={styles.locationPlaceholder}>Tap to select on map</Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.locationPickerAction}>
-              <MaterialIcons name="map" size={18} color={COLORS.accentLight} />
-              <Text style={styles.locationPickerActionText}>
-                {companyLocation ? 'Change' : 'Open Map'}
-              </Text>
-            </View>
+            <Ionicons
+              name="location-outline"
+              size={18}
+              color="rgba(255,255,255,0.7)"
+              style={{ marginRight: 10 }}
+            />
+            <Text
+              style={[styles.locationText, !location && styles.locationPlaceholder]}
+              numberOfLines={1}
+            >
+              {location
+                ? (location.address || `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`)
+                : 'Tap to set your business location'
+              }
+            </Text>
+            <Ionicons name="map-outline" size={18} color="rgba(255,255,255,0.5)" />
           </TouchableOpacity>
 
-          {/* Mini map preview once location is set */}
-          {companyCoords && (
-            <TouchableOpacity
-              style={styles.miniMapWrapper}
-              onPress={() => setLocationModalVisible(true)}
-              activeOpacity={0.9}
-            >
-              <MapView
-                style={styles.miniMap}
-                region={{
-                  ...companyCoords,
-                  latitudeDelta: 0.008,
-                  longitudeDelta: 0.008,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                pitchEnabled={false}
-                rotateEnabled={false}
-                pointerEvents="none"
-              >
-                <Marker coordinate={companyCoords} pinColor={COLORS.accent} />
-              </MapView>
-              <View style={styles.miniMapOverlay}>
-                <Ionicons name="pencil" size={14} color="#fff" />
-                <Text style={styles.miniMapOverlayText}>Tap to edit</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-
           {/* BR Number */}
-          <View style={[styles.card, { marginTop: 14 }]}>
+          <View style={styles.card}>
             <InputField value={brNumber} onChangeText={setBrNumber} placeholder="BR Number" />
           </View>
 
@@ -858,142 +650,29 @@ export default function ProviderProfiledit(): React.JSX.Element {
           </View>
         </Pressable>
       </Modal>
-
-      {/* Location Picker Modal */}
-      <LocationPickerModal
-        visible={locationModalVisible}
-        onClose={() => setLocationModalVisible(false)}
-        onConfirm={handleLocationConfirm}
-        initialCoords={companyCoords}
-      />
     </SafeAreaView>
   );
 }
 
-// ─── Map Modal Styles ─────────────────────────────────────────────────────────
-
-const mapStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  headerSafe: { backgroundColor: '#fff', zIndex: 10 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8EDF5',
-  },
-  headerBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#F0F4FF',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: { color: '#1A1A2E', fontSize: 17, fontWeight: '700' },
-  hintBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(26,107,255,0.08)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  hintText: { color: COLORS.accentLight, fontSize: 12, fontWeight: '500' },
-  map: { flex: 1 },
-  myLocationBtn: {
-    position: 'absolute',
-    right: 16,
-    bottom: 220,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(26,107,255,0.2)',
-  },
-  myLocationText: { color: COLORS.accent, fontSize: 13, fontWeight: '700' },
-  bottomSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 16,
-    minHeight: 52,
-  },
-  addressIconWrap: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(26,107,255,0.1)',
-    alignItems: 'center', justifyContent: 'center',
-    marginTop: 2,
-  },
-  addressLabel: {
-    color: '#888', fontSize: 11,
-    fontWeight: '600', textTransform: 'uppercase',
-    letterSpacing: 0.5, marginBottom: 3,
-  },
-  addressText: { color: '#1A1A2E', fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  addressPlaceholder: { color: '#AAAAAA', fontSize: 14 },
-  addressResolving: { color: COLORS.accentLight, fontSize: 13 },
-  confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    paddingVertical: 15,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  confirmBtnDisabled: { backgroundColor: '#B0C4DE', shadowOpacity: 0, elevation: 0 },
-  confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-});
-
-// ─── Main Screen Styles ───────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: COLORS.divider,
   },
   headerBack: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.card,
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.card, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: COLORS.cardBorder,
   },
   headerTitle: { color: COLORS.text, fontSize: 17, fontWeight: '700', letterSpacing: 0.3 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   langText: { color: COLORS.textSub, fontSize: 13, fontWeight: '600' },
   toggleOuter: {
-    width: 40, height: 22, borderRadius: 11,
-    backgroundColor: COLORS.accent,
+    width: 40, height: 22, borderRadius: 11, backgroundColor: COLORS.accent,
     justifyContent: 'center', paddingHorizontal: 2, alignItems: 'flex-end',
   },
   toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' },
@@ -1002,8 +681,7 @@ const styles = StyleSheet.create({
   avatarWrapper: { alignSelf: 'center', marginBottom: 24 },
   avatar: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: COLORS.accent },
   avatarPlaceholder: {
-    width: 84, height: 84, borderRadius: 42,
-    backgroundColor: COLORS.card,
+    width: 84, height: 84, borderRadius: 42, backgroundColor: COLORS.card,
     borderWidth: 2, borderColor: COLORS.cardBorder,
     alignItems: 'center', justifyContent: 'center',
   },
@@ -1029,9 +707,8 @@ const styles = StyleSheet.create({
   input: {
     color: COLORS.text, fontSize: 15, fontWeight: '500',
     paddingVertical: 10, paddingHorizontal: 12,
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 10, borderWidth: 1, borderColor: COLORS.inputBorder,
-    minHeight: 44,
+    backgroundColor: COLORS.inputBg, borderRadius: 10,
+    borderWidth: 1, borderColor: COLORS.inputBorder, minHeight: 44,
   },
   inputMultiline: { minHeight: 90, paddingTop: 10 },
   divider: { height: 1, backgroundColor: COLORS.divider, marginVertical: 10 },
@@ -1075,48 +752,21 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.cardBorder,
   },
 
-  // Location picker
-  fieldSectionLabel: {
-    color: COLORS.textSub, fontSize: 12, fontWeight: '600',
-    textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8,
-  },
-  locationPickerBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  // Location field — mirrors ProviderSignUp style
+  locationField: {
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.card, borderRadius: 14,
     borderWidth: 1, borderColor: COLORS.cardBorder,
-    paddingHorizontal: 14, paddingVertical: 12,
+    paddingHorizontal: 14, paddingVertical: 14, marginBottom: 14,
   },
-  locationPickerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  locationIconCircle: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: COLORS.accentGlow,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  locationSetLabel: {
-    color: COLORS.accentLight, fontSize: 11, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2,
-  },
-  locationAddress: { color: COLORS.text, fontSize: 13, fontWeight: '500', lineHeight: 18 },
-  locationPlaceholder: { color: COLORS.textMuted, fontSize: 14 },
-  locationPickerAction: { alignItems: 'center', gap: 3, marginLeft: 10 },
-  locationPickerActionText: { color: COLORS.accentLight, fontSize: 11, fontWeight: '700' },
-  miniMapWrapper: {
-    marginTop: 10, borderRadius: 14, overflow: 'hidden',
-    height: 130, borderWidth: 1, borderColor: COLORS.cardBorder,
-  },
-  miniMap: { flex: 1 },
-  miniMapOverlay: {
-    position: 'absolute', bottom: 8, right: 8,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
-  },
-  miniMapOverlayText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  locationText: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: '500' },
+  locationPlaceholder: { color: COLORS.textMuted, fontWeight: '400' },
 
   // Work card
   workCard: {
     backgroundColor: COLORS.card, borderRadius: 16,
-    borderWidth: 1, borderColor: COLORS.cardBorder, padding: 16, marginBottom: 14,
+    borderWidth: 1, borderColor: COLORS.cardBorder,
+    padding: 16, marginBottom: 14,
   },
   workCardHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -1141,16 +791,16 @@ const styles = StyleSheet.create({
   attachmentPreviewRow: { flexDirection: 'row', marginBottom: 8 },
   attachmentChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(26,107,255,0.15)',
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
-    marginRight: 8, borderWidth: 1,
-    borderColor: 'rgba(26,107,255,0.3)', maxWidth: 140,
+    backgroundColor: 'rgba(26,107,255,0.15)', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 5, marginRight: 8,
+    borderWidth: 1, borderColor: 'rgba(26,107,255,0.3)', maxWidth: 140,
   },
   attachmentChipText: { color: COLORS.textSub, fontSize: 11, flex: 1 },
   addWorkBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: COLORS.card, borderRadius: 14,
-    borderWidth: 1, borderColor: COLORS.accentLight, paddingVertical: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: COLORS.accentLight,
+    paddingVertical: 14, marginBottom: 12,
   },
   addWorkBtnText: { color: COLORS.accentLight, fontSize: 15, fontWeight: '700' },
   orText: { color: COLORS.textMuted, fontSize: 14, textAlign: 'center', marginBottom: 12 },
@@ -1164,15 +814,13 @@ const styles = StyleSheet.create({
   editBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: COLORS.accent, borderRadius: 14, paddingVertical: 15,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.45,
-    shadowRadius: 14, elevation: 8,
+    shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45, shadowRadius: 14, elevation: 8,
   },
   editBtnText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#0D2251',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    backgroundColor: '#0D2251', borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingTop: 12, paddingBottom: 34, paddingHorizontal: 20,
     maxHeight: '65%', borderWidth: 1, borderColor: COLORS.cardBorder,
   },
@@ -1180,7 +828,10 @@ const styles = StyleSheet.create({
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: COLORS.divider, alignSelf: 'center', marginBottom: 16,
   },
-  modalTitle: { color: COLORS.text, fontSize: 17, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
+  modalTitle: {
+    color: COLORS.text, fontSize: 17, fontWeight: '700',
+    marginBottom: 16, textAlign: 'center',
+  },
   modalItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 14, paddingHorizontal: 4,
