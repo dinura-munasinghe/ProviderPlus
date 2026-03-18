@@ -106,7 +106,7 @@ export default function HomeScreen() {
             </View>
               <TouchableOpacity
                 style={styles.bellButton}
-                onPress={() => router.push('Alerts')}
+                onPress={() => router.push('/Alerts')}
               >
                 <Text style={styles.bellIcon}>🔔</Text>
                 {hasUnreadAlerts && <View style={styles.redDot}/>}

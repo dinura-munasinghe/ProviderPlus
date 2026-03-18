@@ -25,9 +25,9 @@ function AnimatedTabBar({ state, descriptors, navigation }: any) {
   const pathname = usePathname();
 
   const isHomePage = pathname === '/' || pathname === '/index';
-  const isDarkbgPage = pathname.includes('UserLogin') || pathname.includes('Orders');
+  const isDarkbgPage = pathname.includes('UserLogin') || pathname.includes('Orders') || pathname.includes('Alerts');
 
-  const activeTintColor = '#4D96FF';
+  const activeTintColor = '#000000';
   const inactiveTintColor = isDarkbgPage ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)';
 
   const isFullWidth = isHomePage;
