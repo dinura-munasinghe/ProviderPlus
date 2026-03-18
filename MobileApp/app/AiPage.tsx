@@ -170,7 +170,7 @@ const App = () => {
 
                     {/* --- INPUT --- */}
                     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.bottomWrapper}>
-                        <BlurView intensity={40} tint="light" style={styles.inputGlassContainer}>
+                        <BlurView intensity={40} tint="light" experimentalBlurMethod="dimezisBlurView" style={styles.inputGlassContainer}>
                             <TextInput
                                 placeholder="Ask From Servy..."
                                 placeholderTextColor="rgba(255,255,255,0.7)"
@@ -332,7 +332,7 @@ const AnimatedCard = ({ provider, index, router }: { provider: any; index: numbe
                 }
             ]}
         >
-            <BlurView intensity={30} tint="light" style={styles.glassCard}>
+            <BlurView intensity={30} tint="light" experimentalBlurMethod="dimezisBlurView" style={styles.glassCard}>
                 <Image source={require('../assets/images/8fd666c5ddf277987fa36fc615f6f73a3587c900.jpg')} style={styles.avatar} />
                 <View style={styles.cardInfo}>
                     <Text style={styles.providerName}>{provider.name}</Text>
