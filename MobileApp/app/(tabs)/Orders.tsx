@@ -7,6 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useLanguage } from '../context/LanguageContext'; // ✅ ADDED
 import { Ionicons } from '@expo/vector-icons';
 import { fetchMyBookings, Booking } from '../services/ordersService';
 
@@ -65,12 +66,21 @@ function ModalRow({ label, value, valueColor = '#1a1a1a' }: {
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
-
+// ─── Main Screen ──────────────────────────────────────────────────────
 function OrdersScreen() {
   const router = useRouter();
 
-  const [isSinhala, setIsSinhala]       = useState(false);
+  // ✅ REMOVED local isSinhala, toggleLanguage
+  // ✅ ADDED — get from context
+  const { isSinhala, toggleLanguage, t, isTranslating } = useLanguage();
+
+  const [mins, setMins] = useState(59);
+
+  useEffect(() => {
+    const timer = setInterval(() => setMins(p => (p > 0 ? p - 1 : 0)), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [bookings, setBookings]         = useState<Booking[]>([]);
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
@@ -107,14 +117,14 @@ function OrdersScreen() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-      <LinearGradient colors={['#00C6FF', '#0072FF']} style={styles.container}>
-        <SafeAreaView style={styles.safeArea}>
+    <LinearGradient colors={['#00C6FF', '#0072FF']} style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
 
-          {/* TOP BAR */}
-          <View style={styles.topBar}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-              <Text style={styles.backArrow}>‹</Text>
-            </TouchableOpacity>
+        {/* ── TOP BAR ── */}
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Text style={styles.backArrow}>‹</Text>
+          </TouchableOpacity>
 
             <View style={styles.languageToggle}>
               <Text style={[styles.langLabel, !isSinhala && styles.langLabelActive]}>ENG</Text>
@@ -122,7 +132,7 @@ function OrdersScreen() {
               <Text style={[styles.langLabel, isSinhala && styles.langLabelActive]}>සිං</Text>
               <Switch
                   value={isSinhala}
-                  onValueChange={() => setIsSinhala(p => !p)}
+                  onValueChange={toggleLanguage}
                   trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#FF6B35' }}
                   thumbColor={isSinhala ? '#fff' : '#f0f0f0'}
                   ios_backgroundColor="rgba(255,255,255,0.3)"
@@ -328,15 +338,19 @@ function OrdersScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.modalCloseBtnText}>CLOSE</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalCloseBtnText}>CLOSE</Text>
+              </TouchableOpacity>
 
-        </SafeAreaView>
-      </LinearGradient>
+            </View>
+          </View>
+        </Modal>
+
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -463,3 +477,4 @@ const styles = StyleSheet.create({
 });
 
 export default OrdersScreen;
+
