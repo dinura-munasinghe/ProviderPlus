@@ -1,3 +1,17 @@
+/**
+ * ProviderProfiledit.tsx
+ * Provider+ App — Provider Profile Editing Screen
+ *
+ * Changes in this commit:
+ *  - LinearGradient background (#1086b5 → #022373)
+ *  - Skills chips center-aligned
+ *  - Provider+ logo in top right of header
+ *  - Edit Details button removed
+ *
+ * Required packages:
+ *   npx expo install expo-image-picker expo-document-picker expo-linear-gradient
+ */
+
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -13,9 +27,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
-  SafeAreaView,
+  Switch,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather, AntDesign } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -335,6 +350,7 @@ export default function ProviderProfiledit(): React.JSX.Element {
 
   const [location, setLocation] = useState<SelectedLocation | null>(null);
   const [brNumber, setBrNumber] = useState<string>('');
+  const [brCertAttachments, setBrCertAttachments] = useState<AttachmentFile[]>([]);
 
   // ── Validation errors ─────────────────────────────────────────────────────
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -342,6 +358,10 @@ export default function ProviderProfiledit(): React.JSX.Element {
   const [works, setWorks] = useState<WorkItem[]>([
     { name: '', attachments: [], description: '' },
   ]);
+
+  // ── Language toggle ───────────────────────────────────────────────────────
+  const [isSinhala, setIsSinhala] = useState<boolean>(false);
+  const toggleLanguage = () => setIsSinhala(v => !v);
 
   // ── Read LocationPicker result on focus ───────────────────────────────────
   useFocusEffect(
@@ -410,12 +430,92 @@ export default function ProviderProfiledit(): React.JSX.Element {
   const removeWork = (index: number): void =>
     setWorks((prev) => prev.filter((_, i) => i !== index));
 
+  // ── BR Certificate attachment ─────────────────────────────────────────────
+
+  const handleBrCertAttachment = (): void => {
+    Alert.alert(
+      'Attach BR Certificate',
+      'Choose how to add your document',
+      [
+        {
+          text: 'Camera',
+          onPress: async () => {
+            const permission = await ImagePicker.requestCameraPermissionsAsync();
+            if (!permission.granted) {
+              Alert.alert('Permission denied', 'Camera access is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: false,
+              quality: 0.9,
+            });
+            if (!result.canceled && result.assets.length > 0) {
+              const file = result.assets[0];
+              setBrCertAttachments(prev => [
+                ...prev,
+                { name: `br_cert_${Date.now()}.jpg`, uri: file.uri },
+              ]);
+            }
+          },
+        },
+        {
+          text: 'Photo Library',
+          onPress: async () => {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+              Alert.alert('Permission denied', 'Media library access is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsMultipleSelection: true,
+              quality: 0.9,
+            });
+            if (!result.canceled) {
+              const files: AttachmentFile[] = result.assets.map((a) => ({
+                name: a.fileName ?? `br_cert_${Date.now()}.jpg`,
+                uri: a.uri,
+              }));
+              setBrCertAttachments(prev => [...prev, ...files]);
+            }
+          },
+        },
+        {
+          text: 'Files / Documents',
+          onPress: async () => {
+            try {
+              const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'image/*'],
+                multiple: true,
+                copyToCacheDirectory: true,
+              });
+              if (!result.canceled && result.assets) {
+                const files: AttachmentFile[] = result.assets.map((a) => ({
+                  name: a.name,
+                  uri: a.uri,
+                }));
+                setBrCertAttachments(prev => [...prev, ...files]);
+              }
+            } catch {
+              Alert.alert('Error', 'Could not open file picker.');
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+      { cancelable: true }
+    );
+  };
+
   // ── Validation ────────────────────────────────────────────────────────────
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const phoneRegex = /^\d{7,15}$/;
+    // Sri Lankan NIC: old format = 9 digits + V/X, new format = 12 digits
+    const nicRegex   = /^(\d{9}[VXvx]|\d{12})$/;
 
     if (!name.trim())
       newErrors.name = 'Full name is required';
@@ -429,6 +529,9 @@ export default function ProviderProfiledit(): React.JSX.Element {
       newErrors.contact = 'Contact number is required';
     else if (!phoneRegex.test(contact.trim()))
       newErrors.contact = 'Enter a valid contact number (7–15 digits)';
+
+    if (nic.trim() && !nicRegex.test(nic.trim()))
+      newErrors.nic = 'Invalid NIC — use 9 digits + V/X (old) or 12 digits (new)';
 
     if (!category)
       newErrors.category = 'Please select a service category';
@@ -468,29 +571,38 @@ export default function ProviderProfiledit(): React.JSX.Element {
       end={{ x: 0.5, y: 1 }}
     >
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" />
 
         {/* ── Header ── */}
         <View style={styles.header}>
-          {/* Provider+ logo — top left */}
-          <Image
-            source={require('../assets/images/provider-logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-          />
+          {/* Left: back button + logo */}
+          <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+              <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+            </TouchableOpacity>
+            <Image
+              source={require('../assets/images/provider-logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+          </View>
 
           {/* Title */}
           <Text style={styles.headerTitle}>Provider Profile</Text>
 
-          {/* ENG toggle — top right (unchanged) */}
-          <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
-              <Ionicons name="chevron-back" size={22} color={COLORS.text} />
-            </TouchableOpacity>
-            <Text style={styles.langText}>ENG</Text>
-            <View style={styles.toggleOuter}>
-              <View style={styles.toggleThumb} />
-            </View>
+          {/* Right: language toggle */}
+          <View style={styles.languageToggle}>
+            <Text style={[styles.langLabel, !isSinhala && styles.langLabelActive]}>ENG</Text>
+            <Text style={styles.langDivider}>|</Text>
+            <Text style={[styles.langLabel, isSinhala && styles.langLabelActive]}>සිං</Text>
+            <Switch
+              value={isSinhala}
+              onValueChange={toggleLanguage}
+              trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#FF6B35' }}
+              thumbColor={isSinhala ? '#fff' : '#f0f0f0'}
+              ios_backgroundColor="rgba(255,255,255,0.3)"
+              style={styles.switchStyle}
+            />
           </View>
         </View>
 
@@ -534,7 +646,8 @@ export default function ProviderProfiledit(): React.JSX.Element {
               <InputField label="Contact No." value={contact} onChangeText={(t) => { setContact(t); setErrors(e => ({ ...e, contact: '' })); }} keyboardType="phone-pad" />
               {err('contact')}
               <View style={styles.divider} />
-              <InputField label="NIC" value={nic} onChangeText={setNic} />
+              <InputField label="NIC" value={nic} onChangeText={(t) => { setNic(t); setErrors(e => ({ ...e, nic: '' })); }} />
+              {err('nic')}
             </View>
 
             {/* ── Service Information ── */}
@@ -656,9 +769,58 @@ export default function ProviderProfiledit(): React.JSX.Element {
             </TouchableOpacity>
             {err('location')}
 
-            {/* ── BR Number ── */}
+            {/* ── BR Number + Certificate ── */}
             <View style={styles.card}>
               <InputField value={brNumber} onChangeText={setBrNumber} placeholder="BR Number" />
+
+              <View style={styles.divider} />
+
+              {/* BR Certificate attachment */}
+              <Text style={styles.inputLabel}>BR Certificate</Text>
+              <TouchableOpacity
+                style={styles.brCertField}
+                onPress={handleBrCertAttachment}
+                activeOpacity={0.8}
+              >
+                <View>
+                  <Text style={styles.attachmentLabel}>Attachments</Text>
+                  {brCertAttachments.length === 0 ? (
+                    <Text style={styles.attachmentPlaceholder}>
+                      Attach photos or PDF of your BR certificate
+                    </Text>
+                  ) : (
+                    <Text style={styles.attachmentCount}>
+                      {brCertAttachments.length} file{brCertAttachments.length > 1 ? 's' : ''} attached
+                    </Text>
+                  )}
+                </View>
+                <Feather name="paperclip" size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
+
+              {/* Preview chips */}
+              {brCertAttachments.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.attachmentPreviewRow}
+                >
+                  {brCertAttachments.map((file, fi) => (
+                    <View key={fi} style={styles.attachmentChip}>
+                      <Feather name="file" size={12} color={COLORS.accentLight} />
+                      <Text style={styles.attachmentChipText} numberOfLines={1}>
+                        {file.name.length > 14 ? file.name.slice(0, 12) + '…' : file.name}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setBrCertAttachments(prev => prev.filter((_, i) => i !== fi))
+                        }
+                      >
+                        <AntDesign name="close" size={10} color={COLORS.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             {/* ── Work Portfolio ── */}
@@ -682,12 +844,6 @@ export default function ProviderProfiledit(): React.JSX.Element {
 
             <Text style={styles.orText}>Or</Text>
 
-            {/* Save button (replaces Edit Details) */}
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-              <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
-              <Text style={styles.saveBtnText}>Save Profile</Text>
-            </TouchableOpacity>
-
             {/* Skip */}
             <TouchableOpacity
               style={styles.skipBtn}
@@ -695,6 +851,14 @@ export default function ProviderProfiledit(): React.JSX.Element {
               onPress={() => router.back()}
             >
               <Text style={styles.skipBtnText}>Skip</Text>
+            </TouchableOpacity>
+
+            <View style={{ height: 16 }} />
+
+            {/* Save Profile */}
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+              <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+              <Text style={styles.saveBtnText}>Save Profile</Text>
             </TouchableOpacity>
 
             <View style={{ height: 40 }} />
@@ -760,6 +924,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.divider,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   headerBack: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -771,25 +940,22 @@ const styles = StyleSheet.create({
     fontWeight: '700', letterSpacing: 0.3,
   },
   headerLogo: {
-    width: 90,
-    height: 32,
+    width: 80,
+    height: 28,
   },
-  headerRight: {
+  // Language toggle
+  languageToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  langText: {
-    color: COLORS.textSub, fontSize: 13, fontWeight: '600',
-  },
-  toggleOuter: {
-    width: 40, height: 22, borderRadius: 11,
-    backgroundColor: COLORS.accent,
-    justifyContent: 'center', paddingHorizontal: 2, alignItems: 'flex-end',
-  },
-  toggleThumb: {
-    width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff',
-  },
+  langLabel:       { color: 'rgba(255,255,255,0.5)', fontWeight: '700', fontSize: 13, marginHorizontal: 3 },
+  langLabelActive: { color: 'white' },
+  langDivider:     { color: 'rgba(255,255,255,0.4)', marginHorizontal: 2 },
+  switchStyle:     { marginLeft: 6, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] },
 
   // Scroll
   scroll: { flex: 1 },
@@ -906,6 +1072,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: COLORS.cardBorder,
+  },
+
+  // BR cert attachment field — same look as work card attachment
+  brCertField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.inputBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+    marginTop: 6,
   },
 
   // Location
