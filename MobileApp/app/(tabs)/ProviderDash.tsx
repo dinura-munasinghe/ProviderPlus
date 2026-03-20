@@ -20,6 +20,8 @@ import {
   fetchAIOverview,
   fetchDashboardData,
 } from '../services/dashboardService';
+import apiClient from "@/app/services/apiClient";
+import {useProviderLocationSender} from "@/app/hooks/useProviderLocationSender";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -220,6 +222,18 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiClient.get('/geo/active')  // endpoint you'd build later
+        .then(res => setActiveBookingId(res.data.booking_id))
+        .catch(() => {});
+  }, []);
+
+  useProviderLocationSender({
+    enabled: !!activeBookingId,
+    bookingId: activeBookingId ?? '',
+  });
 
   useEffect(() => {
     Animated.parallel([
