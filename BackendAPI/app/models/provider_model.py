@@ -7,42 +7,52 @@ from .category_model import Category
 
 class BusinessDocument(dict):
     """
-    Structure for business  documents stored in GridFS
+    Structure for business documents stored in GridFS.
+
+    Example structure:
+    {
+        "file_id":          "gridfs_object_id",
+        "filename":         "business_license.pdf",
+        "type":             "nic" | "br_certificate" | "business_license" | "certification",
+        "status":           "pending" | "verified" | "rejected",
+        "uploaded_at":      datetime,
+        "verified_at":      datetime or None,
+        "rejection_reason": "Document unclear" or None
+    }
     """
-    # Example structure:
-    # {
-    #     "file_id": "gridfs_object_id",
-    #     "filename": "business_license.pdf",
-    #     "type": "business_license",  # or "certification", "id_proof"
-    #     "status": "pending",  # "pending", "verified", "rejected"
-    #     "uploaded_at": datetime,
-    #     "verified_at": datetime or None,
-    #     "rejection_reason": "Document unclear" or None
-    # }
     pass
 
 
 class Provider(Document):
-    name: str
-    category: Link[Category]
-    description: str
-    profile_image: Optional[str] = None
-    tags: List[str] = []
-    rating: float = 0.0
-
+    # ── Identity ──────────────────────────────────────────────────────────────
+    name:         str
+    email:        Optional[str] = None              # optional — fetched from User document
     phone_number: str
+    user_id:      str
 
+    # ── Service Info ──────────────────────────────────────────────────────────
+    category:    Link[Category]
+    description: str
+    tags:        List[str] = []              # skills
+
+    # ── Media ─────────────────────────────────────────────────────────────────
+    profile_image:    Optional[str]  = None
+    portfolio_images: List[str]      = []
+
+    # ── Location ──────────────────────────────────────────────────────────────
+    # GeoJSON format: { "type": "Point", "coordinates": [longitude, latitude] }
     location: Optional[dict] = None
 
-    user_id: str
+    # ── Verification ──────────────────────────────────────────────────────────
+    is_verified:        bool        = False
+    # Each entry follows the BusinessDocument structure above
+    business_documents: List[dict]  = []
 
-    is_verified: bool = False
+    # ── Stats ─────────────────────────────────────────────────────────────────
+    rating: float = 0.0
 
-    business_documents: List[dict] = []
-
-    portfolio_images: List[str] = []
-
-    is_active: bool = True
+    # ── Status ────────────────────────────────────────────────────────────────
+    is_active:  bool     = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
