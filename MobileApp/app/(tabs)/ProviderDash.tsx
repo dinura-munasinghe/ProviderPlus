@@ -12,6 +12,7 @@ import {
   StatusBar,
   RefreshControl,
   ViewStyle,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -20,6 +21,7 @@ import {
   fetchAIOverview,
   fetchDashboardData,
 } from '../services/dashboardService';
+import { useLanguage } from '../context/LanguageContext'; // ✅ ADDED
 import apiClient from "@/app/services/apiClient";
 import {useProviderLocationSender} from "@/app/hooks/useProviderLocationSender";
 
@@ -42,6 +44,7 @@ interface AIOverviewCardProps {
   loading: boolean;
   error: boolean;
   onRetry: () => void;
+  t: (text: string) => string; // ✅ pass t() into sub-components
 }
 
 interface RouteParams {
@@ -137,10 +140,7 @@ const ExpandableCard: React.FC<ExpandableCardProps> = ({
             {subtitle ? <Text style={styles.cardSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
           </View>
         </View>
-
-        <Animated.View
-          style={[styles.expandedSection, { height: expandedHeight, opacity: animHeight }]}
-        >
+        <Animated.View style={[styles.expandedSection, { height: expandedHeight, opacity: animHeight }]}>
           {expanded && (
             <View style={styles.expandedContentInner}>
               <View style={styles.divider} />
@@ -154,8 +154,7 @@ const ExpandableCard: React.FC<ExpandableCardProps> = ({
 };
 
 // ─── AI Overview Card ─────────────────────────────────────────
-
-const AIOverviewCard: React.FC<AIOverviewCardProps> = ({ overview, loading, error, onRetry }) => {
+const AIOverviewCard: React.FC<AIOverviewCardProps> = ({ overview, loading, error, onRetry, t }) => {
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
@@ -175,7 +174,8 @@ const AIOverviewCard: React.FC<AIOverviewCardProps> = ({ overview, loading, erro
     <View style={styles.aiCard}>
       <View style={styles.aiCardHeader}>
         <Text style={styles.aiCardIcon}>✨</Text>
-        <Text style={styles.aiCardTitle}>AI Overview</Text>
+        {/* ✅ */}
+        <Text style={styles.aiCardTitle}>{t('AI Overview')}</Text>
       </View>
 
       {loading ? (
@@ -186,9 +186,10 @@ const AIOverviewCard: React.FC<AIOverviewCardProps> = ({ overview, loading, erro
         </View>
       ) : error ? (
         <View style={styles.aiErrorContainer}>
-          <Text style={styles.aiErrorText}>Unable to load insights right now.</Text>
+          {/* ✅ */}
+          <Text style={styles.aiErrorText}>{t('Unable to load insights right now.')}</Text>
           <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
-            <Text style={styles.retryButtonText}>Tap to Retry</Text>
+            <Text style={styles.retryButtonText}>{t('Tap to Retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -205,7 +206,10 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
   const providerId: string = route?.params?.providerId || 'provider_001';
   const jobRole: string = route?.params?.jobRole || 'Plumber';
 
-  const [isSinhala, setIsSinhala] = useState<boolean>(false);
+  // ✅ REMOVED local isSinhala, toggleLanguage
+  // ✅ ADDED — get from context
+  const { isSinhala, toggleLanguage, t, isTranslating } = useLanguage();
+
   const [aiOverview, setAiOverview] = useState<string>('');
   const [aiLoading, setAiLoading] = useState<boolean>(true);
   const [aiError, setAiError] = useState<boolean>(false);
@@ -264,9 +268,7 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
     }
   }, [providerId, providerName, jobRole, dashboardData]);
 
-  useEffect(() => {
-    loadAIOverview();
-  }, [loadAIOverview]);
+  useEffect(() => { loadAIOverview(); }, [loadAIOverview]);
 
   // ── Load Dashboard Stats via service ──
   const loadDashboardData = useCallback(async (): Promise<void> => {
@@ -279,19 +281,13 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
     }
   }, [providerId]);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
+  useEffect(() => { loadDashboardData(); }, [loadDashboardData]);
 
   // ── Pull to Refresh ──
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
     await Promise.all([loadAIOverview(), loadDashboardData()]);
     setRefreshing(false);
-  };
-
-  const toggleLanguage = (): void => {
-    setIsSinhala(!isSinhala);
   };
 
   const greeting = getGreeting();
@@ -323,6 +319,10 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
                 <Text style={[styles.langLabel, !isSinhala && styles.langLabelActive]}>ENG</Text>
                 <Text style={styles.langDivider}>|</Text>
                 <Text style={[styles.langLabel, isSinhala && styles.langLabelActive]}>සිං</Text>
+                {/* ✅ loading spinner */}
+                {isTranslating && (
+                  <ActivityIndicator size="small" color="#FFF" style={{ marginRight: 4 }} />
+                )}
                 <Switch
                   value={isSinhala}
                   onValueChange={toggleLanguage}
@@ -349,14 +349,12 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
 
           {/* ── Welcome Section ── */}
           <Animated.View
-            style={[
-              styles.welcomeSection,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-            ]}
+            style={[styles.welcomeSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
           >
-            <Text style={styles.dashboardLabel}>Provider Dashboard</Text>
+            {/* ✅ */}
+            <Text style={styles.dashboardLabel}>{t('Provider Dashboard')}</Text>
             <Text style={styles.greetingText}>
-              {greeting}, {emoji}
+              {t(greeting)}, {emoji}
             </Text>
             <Text style={styles.providerName}>{providerName}</Text>
           </Animated.View>
@@ -368,6 +366,7 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
               loading={aiLoading}
               error={aiError}
               onRetry={loadAIOverview}
+              t={t} // ✅ pass t() into AI card
             />
           </Animated.View>
 
@@ -376,21 +375,21 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
             <View style={styles.cardRow}>
               <ExpandableCard
                 icon="✅"
-                title="Completed Jobs"
+                title={t('Completed Jobs')} // ✅
                 value={dashboardData.completedJobs}
-                subtitle="Today"
+                subtitle={t('Today')} // ✅
                 onPress={() => navigation?.navigate?.('CompletedJobs')}
                 style={styles.cardWrapper}
               />
               <ExpandableCard
                 icon="📋"
-                title="Upcoming Jobs"
+                title={t('Upcoming Jobs')} // ✅
                 value={dashboardData.upcomingJobs}
-                subtitle="Scheduled"
+                subtitle={t('Scheduled')} // ✅
                 expandedContent={
                   <View>
-                    <Text style={styles.expandedText}>Next job in 2 hours</Text>
-                    <Text style={styles.expandedText}>Tap to see full schedule →</Text>
+                    <Text style={styles.expandedText}>{t('Next job in 2 hours')}</Text>
+                    <Text style={styles.expandedText}>{t('Tap to see full schedule →')}</Text>
                   </View>
                 }
                 style={styles.cardWrapper}
@@ -400,25 +399,25 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
             <View style={styles.cardRow}>
               <ExpandableCard
                 icon="🔔"
-                title="Notifications"
+                title={t('Notifications')} // ✅
                 value={dashboardData.notifications}
-                subtitle="New"
+                subtitle={t('New')} // ✅
                 expandedContent={
                   <View>
-                    <Text style={styles.expandedText}>• New job request nearby</Text>
-                    <Text style={styles.expandedText}>Tap to view all →</Text>
+                    <Text style={styles.expandedText}>{t('• New job request nearby')}</Text>
+                    <Text style={styles.expandedText}>{t('Tap to view all →')}</Text>
                   </View>
                 }
                 style={styles.cardWrapper}
               />
               <ExpandableCard
                 icon="⭐"
-                title="Rating"
+                title={t('Rating')} // ✅
                 value={dashboardData.rating}
                 subtitle={`(${dashboardData.totalReviews})`}
                 expandedContent={
                   <View>
-                    <Text style={styles.expandedText}>Top rated in your area!</Text>
+                    <Text style={styles.expandedText}>{t('Top rated in your area!')}</Text>
                     <Text style={styles.expandedText}>5★: 18 | 4★: 4 | 3★: 2</Text>
                   </View>
                 }
@@ -429,26 +428,26 @@ const ProviderDashboard: React.FC<ProviderDashboardProps> = ({ navigation, route
             <View style={styles.cardRow}>
               <ExpandableCard
                 icon="💬"
-                title="Responses"
+                title={t('Responses')} // ✅
                 value={dashboardData.customerResponses}
-                subtitle="Pending"
+                subtitle={t('Pending')} // ✅
                 expandedContent={
                   <View>
-                    <Text style={styles.expandedText}>3 awaiting your reply</Text>
-                    <Text style={styles.expandedText}>Avg response time: 12min</Text>
+                    <Text style={styles.expandedText}>{t('3 awaiting your reply')}</Text>
+                    <Text style={styles.expandedText}>{t('Avg response time: 12min')}</Text>
                   </View>
                 }
                 style={styles.cardWrapper}
               />
               <ExpandableCard
                 icon="🔄"
-                title="Re-Schedules"
+                title={t('Re-Schedules')} // ✅
                 value={dashboardData.reSchedules}
-                subtitle="View All"
+                subtitle={t('View All')} // ✅
                 expandedContent={
                   <View>
-                    <Text style={styles.expandedText}>2 pending approval</Text>
-                    <Text style={styles.expandedText}>10 completed this month</Text>
+                    <Text style={styles.expandedText}>{t('2 pending approval')}</Text>
+                    <Text style={styles.expandedText}>{t('10 completed this month')}</Text>
                   </View>
                 }
                 style={styles.cardWrapper}

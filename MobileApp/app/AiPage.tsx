@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { sendChatMessage } from './services/chatService';
+import { useLanguage } from './context/LanguageContext';
 
 // --- TYPES ---
 interface Message {
@@ -33,11 +34,12 @@ const App = () => {
     const [inputText, setInputText] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
     const flatListRef = useRef<FlatList>(null);
+    const { t } = useLanguage();
 
     const suggestions = [
-        "Find a Top Rated provider",
-        "Fix a leaking tap",
-        "Emergency pipe repair"
+        t("Find a Top Rated provider"),
+        t("Fix a leaking tap"),
+        t("Emergency pipe repair")
     ];
 
     // --- HANDLERS ---
@@ -141,8 +143,8 @@ const App = () => {
                         ListEmptyComponent={() => (
                             <View style={styles.emptyContainer}>
                                 <Image source={require('../assets/images/provider-logo.png')} style={styles.largeLogo} />
-                                <Text style={styles.welcomeTitle}>Hello! Im Survy</Text>
-                                <Text style={styles.welcomeSub}>What service do you need today?</Text>
+                                <Text style={styles.welcomeTitle}>{t('Hello! Im Survy')}</Text>
+                                <Text style={styles.welcomeSub}>{t('What service do you need today?')}</Text>
                                 <View style={styles.suggestionGrid}>
                                     {suggestions.map((item, index) => (
                                         <TouchableOpacity
@@ -170,9 +172,9 @@ const App = () => {
 
                     {/* --- INPUT --- */}
                     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.bottomWrapper}>
-                        <BlurView intensity={40} tint="light" style={styles.inputGlassContainer}>
+                        <BlurView intensity={40} tint="light" experimentalBlurMethod="dimezisBlurView" style={styles.inputGlassContainer}>
                             <TextInput
-                                placeholder="Ask From Servy..."
+                                placeholder={t("Ask From Servy...")}
                                 placeholderTextColor="rgba(255,255,255,0.7)"
                                 style={styles.input}
                                 value={inputText}
@@ -302,6 +304,7 @@ const AnimatedCardList = ({ data, router }: { data: any[] | undefined; router: a
 const AnimatedCard = ({ provider, index, router }: { provider: any; index: number; router: any }) => {
     const scaleAnim = useRef(new Animated.Value(0.8)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
+    const { t } = useLanguage();
 
     useEffect(() => {
         Animated.parallel([
@@ -332,7 +335,7 @@ const AnimatedCard = ({ provider, index, router }: { provider: any; index: numbe
                 }
             ]}
         >
-            <BlurView intensity={30} tint="light" style={styles.glassCard}>
+            <BlurView intensity={30} tint="light" experimentalBlurMethod="dimezisBlurView" style={styles.glassCard}>
                 <Image source={require('../assets/images/8fd666c5ddf277987fa36fc615f6f73a3587c900.jpg')} style={styles.avatar} />
                 <View style={styles.cardInfo}>
                     <Text style={styles.providerName}>{provider.name}</Text>
@@ -345,7 +348,7 @@ const AnimatedCard = ({ provider, index, router }: { provider: any; index: numbe
                         activeOpacity={0.8}
                     >
                         <LinearGradient colors={['#E440FF', '#5A1F63']} style={styles.bookBtnGradient}>
-                            <Text style={styles.bookText}>Book Now</Text>
+                            <Text style={styles.bookText}>{t('Book Now')}</Text>
                         </LinearGradient>
                     </TouchableOpacity>
                 </View>

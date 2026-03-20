@@ -7,6 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useLanguage } from '../context/LanguageContext'; // ✅ ADDED
 import { Ionicons } from '@expo/vector-icons';
 import { fetchMyBookings, Booking } from '../services/ordersService';
 
@@ -65,12 +66,21 @@ function ModalRow({ label, value, valueColor = '#1a1a1a' }: {
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
-
+// ─── Main Screen ──────────────────────────────────────────────────────
 function OrdersScreen() {
   const router = useRouter();
 
-  const [isSinhala, setIsSinhala]       = useState(false);
+  // ✅ REMOVED local isSinhala, toggleLanguage
+  // ✅ ADDED — get from context
+  const { isSinhala, toggleLanguage, t, isTranslating } = useLanguage();
+
+  const [mins, setMins] = useState(59);
+
+  useEffect(() => {
+    const timer = setInterval(() => setMins(p => (p > 0 ? p - 1 : 0)), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [bookings, setBookings]         = useState<Booking[]>([]);
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
@@ -110,7 +120,7 @@ function OrdersScreen() {
       <LinearGradient colors={['#00C6FF', '#0072FF']} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
 
-          {/* TOP BAR */}
+          {/* ── TOP BAR ── */}
           <View style={styles.topBar}>
             <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
               <Text style={styles.backArrow}>‹</Text>
@@ -122,7 +132,7 @@ function OrdersScreen() {
               <Text style={[styles.langLabel, isSinhala && styles.langLabelActive]}>සිං</Text>
               <Switch
                   value={isSinhala}
-                  onValueChange={() => setIsSinhala(p => !p)}
+                  onValueChange={toggleLanguage}
                   trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#FF6B35' }}
                   thumbColor={isSinhala ? '#fff' : '#f0f0f0'}
                   ios_backgroundColor="rgba(255,255,255,0.3)"
@@ -135,7 +145,7 @@ function OrdersScreen() {
           {loading ? (
               <View style={styles.centred}>
                 <ActivityIndicator size="large" color="#fff" />
-                <Text style={styles.centredText}>Loading your bookings…</Text>
+                <Text style={styles.centredText}>{t('Loading your bookings…')}</Text>
               </View>
 
               /* ERROR */
@@ -144,7 +154,7 @@ function OrdersScreen() {
                 <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.8)" />
                 <Text style={styles.centredText}>{error}</Text>
                 <TouchableOpacity style={styles.retryBtn} onPress={() => loadBookings()}>
-                  <Text style={styles.retryText}>Try Again</Text>
+                  <Text style={styles.retryText}>{t('Try Again')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -163,11 +173,11 @@ function OrdersScreen() {
               >
 
                 {/* ── UPCOMING ── */}
-                <SectionHeader title="UPCOMING" />
+                <SectionHeader title={t('UPCOMING')} />
 
                 {upcoming.length === 0 ? (
                     <View style={styles.emptyCard}>
-                      <Text style={styles.emptyText}>No upcoming bookings</Text>
+                      <Text style={styles.emptyText}>{t('No upcoming bookings')}</Text>
                     </View>
                 ) : (
                     upcoming.map((booking, idx) => {
@@ -217,7 +227,7 @@ function OrdersScreen() {
                                             },
                                           })}
                                       >
-                                        <Text style={styles.payBtnText}>PAY NOW</Text>
+                                        <Text style={styles.payBtnText}>{t('PAY NOW')}</Text>
                                       </TouchableOpacity>
                                   ) : (
                                       /* ── CONFIRMED: show location + provider actions ── */
@@ -229,7 +239,7 @@ function OrdersScreen() {
                                               params: {bookingId: booking.booking_id}
                                             })}
                                         >
-                                          <Text style={styles.actionText}>SEE LOCATION</Text>
+                                          <Text style={styles.actionText}>{t('SEE LOCATION')}</Text>
                                         </TouchableOpacity>
                                         <View style={styles.actionSep} />
                                         <TouchableOpacity
@@ -239,7 +249,7 @@ function OrdersScreen() {
                                               params: { id: booking.provider_id },
                                             })}
                                         >
-                                          <Text style={styles.actionText}>VIEW PROVIDER</Text>
+                                          <Text style={styles.actionText}>{t('VIEW PROVIDER')}</Text>
                                         </TouchableOpacity>
                                       </View>
                                   )}
@@ -251,11 +261,11 @@ function OrdersScreen() {
                 )}
 
                 {/* ── FINISHED ── */}
-                <SectionHeader title="FINISHED" style={{ marginTop: 10 }} />
+                <SectionHeader title={t('FINISHED')} style={{ marginTop: 10 }} />
 
                 {finished.length === 0 ? (
                     <View style={styles.emptyCard}>
-                      <Text style={styles.emptyText}>No finished bookings yet</Text>
+                      <Text style={styles.emptyText}>{t('No finished bookings yet')}</Text>
                     </View>
                 ) : (
                     finished.map(booking => (
@@ -310,15 +320,15 @@ function OrdersScreen() {
 
                 <View style={styles.modalDivider} />
 
-                <ModalRow label="Job Description" value={selectedJob?.summary ?? '—'} />
+                <ModalRow label={t('Job Description')} value={selectedJob?.summary ?? '—'} />
                 <ModalRow
-                    label="Date & Time"
+                    label={t('Date & Time')}
                     value={selectedJob ? formatDateTime(selectedJob.date, selectedJob.time) : '—'}
                 />
 
                 {/* Status badge */}
                 <View style={styles.modalRow}>
-                  <Text style={styles.modalLabel}>Status</Text>
+                  <Text style={styles.modalLabel}>{t('Status')}</Text>
                   <View style={[styles.statusBadge, {
                     backgroundColor: STATUS_COLORS[selectedJob?.status ?? ''] ?? '#888'
                   }]}>
@@ -328,9 +338,13 @@ function OrdersScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.modalCloseBtnText}>CLOSE</Text>
+                <TouchableOpacity
+                    style={styles.modalCloseBtn}
+                    onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.modalCloseBtnText}>{t('CLOSE')}</Text>
                 </TouchableOpacity>
+
               </View>
             </View>
           </Modal>
