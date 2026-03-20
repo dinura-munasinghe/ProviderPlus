@@ -75,8 +75,7 @@ const PaymentScreenContent: React.FC = () => {
                 await confirmBooking(bookingId);
                 Alert.alert('Success', 'Payment confirmed! Provider+ service is booked.');
                 setIsReady(false);
-                // TODO: add the user dashboard page here after booking works
-                router.push('../(tabs)/index')
+                router.push('.//(tabs)/Orders')
             }
             catch(e){
                 console.error('Failed to confirm booking: ', e)

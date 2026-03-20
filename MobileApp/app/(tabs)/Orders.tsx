@@ -1,52 +1,68 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Switch, Modal, Dimensions,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useLanguage } from '../context/LanguageContext'; // ✅ ADDED
+import { Ionicons } from '@expo/vector-icons';
+import { fetchMyBookings, Booking } from '../services/ordersService';
 
 const { width } = Dimensions.get('window');
 
-// ─── Mock Data (replace with your backend data later) ─────────────────
-const FINISHED_JOBS = [
-  {
-    id: '3',
-    providerName: 'Nimal Perera',
-    jobDescription: 'Fixed kitchen plumbing system and replaced pipe joints.',
-    amount: 'LKR 3,500',
-    dateTime: '2025-06-10  ·  2:00 PM',
-    rescheduled: false,
-    category: 'Plumbing',
-  },
-  {
-    id: '4',
-    providerName: 'Saman Silva',
-    jobDescription: 'Repaired electrical wiring in the living room.',
-    amount: 'LKR 5,000',
-    dateTime: '2025-06-08  ·  10:00 AM',
-    rescheduled: true,
-    category: 'Electrical',
-  },
-  {
-    id: '5',
-    providerName: 'Kasun Fernando',
-    jobDescription: 'Full house deep cleaning service completed.',
-    amount: 'LKR 2,800',
-    dateTime: '2025-06-05  ·  4:00 PM',
-    rescheduled: false,
-    category: 'Cleaning',
-  },
-];
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// ─── Avatar Placeholder ───────────────────────────────────────────────
-function Avatar({ size = 52 }: { size?: number }) {
+/** "2025-07-14" + "09:00" → "14 Jul 2025  ·  09:00 AM" */
+const formatDateTime = (date: string, time: string): string => {
+  const d = new Date(`${date}T${time}`);
+  if (isNaN(d.getTime())) return `${date}  ·  ${time}`;
+  const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return `${datePart}  ·  ${timePart}`;
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  pending:   '#FF9800',
+  confirmed: '#2196F3',
+  completed: '#28A745',
+  cancelled: '#FF3B30',
+};
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+
+function Avatar({ size = 52, name }: { size?: number; name: string }) {
+  const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
   return (
-    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={{ fontSize: size * 0.45 }}>👤</Text>
-    </View>
+      <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Text style={{ fontSize: size * 0.35, color: 'white', fontWeight: '700' }}>{initials}</Text>
+      </View>
+  );
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+function SectionHeader({ title, style }: { title: string; style?: object }) {
+  return (
+      <View style={[styles.sectionHeader, style]}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={styles.sectionLine} />
+      </View>
+  );
+}
+
+// ── Modal row ─────────────────────────────────────────────────────────────────
+
+function ModalRow({ label, value, valueColor = '#1a1a1a' }: {
+  label: string; value: string; valueColor?: string;
+}) {
+  return (
+      <View style={styles.modalRow}>
+        <Text style={styles.modalLabel}>{label}</Text>
+        <Text style={[styles.modalValue, { color: valueColor }]}>{value}</Text>
+      </View>
   );
 }
 
@@ -54,256 +70,292 @@ function Avatar({ size = 52 }: { size?: number }) {
 function OrdersScreen() {
   const router = useRouter();
 
-  // Language toggle
-  const [isSinhala, setIsSinhala] = useState(false);
-  const toggleLanguage = () => setIsSinhala(prev => !prev);
+  // ✅ REMOVED local isSinhala, toggleLanguage
+  // ✅ ADDED — get from context
+  const { isSinhala, toggleLanguage, t, isTranslating } = useLanguage();
 
-  // Second upcoming card expand state
-  const [secondExpanded, setSecondExpanded] = useState(false);
-
-  // Countdown timer for first job
   const [mins, setMins] = useState(59);
+
   useEffect(() => {
-    const t = setInterval(() => setMins(p => (p > 0 ? p - 1 : 0)), 60000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setMins(p => (p > 0 ? p - 1 : 0)), 60000);
+    return () => clearInterval(timer);
   }, []);
 
-  // Finished job modal
-  const [selectedJob, setSelectedJob] = useState<(typeof FINISHED_JOBS)[0] | null>(null);
+  const [bookings, setBookings]         = useState<Booking[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [refreshing, setRefreshing]     = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+  const [expandedId, setExpandedId]     = useState<string | null>(null);
+  const [selectedJob, setSelectedJob]   = useState<Booking | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const openModal = (job: (typeof FINISHED_JOBS)[0]) => {
-    setSelectedJob(job);
-    setModalVisible(true);
-  };
+  // ── Fetch bookings ──────────────────────────────────────────────────────────
+
+  const loadBookings = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const data = await fetchMyBookings();
+      setBookings(data);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? 'Could not load bookings. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { loadBookings(); }, []);
+
+  // ── Split bookings ──────────────────────────────────────────────────────────
+
+  const upcoming = bookings.filter(b => b.status === 'pending' || b.status === 'confirmed');
+  const finished = bookings.filter(b => b.status === 'completed' || b.status === 'cancelled');
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <LinearGradient colors={['#00C6FF', '#0072FF']} style={styles.container}>
+    <LinearGradient colors={['#00D9FF', '#0056D2']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
 
         {/* ── TOP BAR ── */}
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.navigate('/(tabs)')}>
             <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
 
-          <View style={styles.languageToggle}>
-            <Text style={[styles.langLabel, !isSinhala && styles.langLabelActive]}>ENG</Text>
-            <Text style={styles.langDivider}>|</Text>
-            <Text style={[styles.langLabel, isSinhala && styles.langLabelActive]}>සිං</Text>
-            <Switch
-              value={isSinhala}
-              onValueChange={toggleLanguage}
-              trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#FF6B35' }}
-              thumbColor={isSinhala ? '#fff' : '#f0f0f0'}
-              ios_backgroundColor="rgba(255,255,255,0.3)"
-              style={styles.switchStyle}
-            />
-          </View>
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
-        >
-
-          {/* ── UPCOMING SECTION ── */}
-          <SectionHeader title="UPCOMING" />
-
-          {/* Card 1 — always expanded */}
-          <View style={styles.card}>
-            <View style={styles.cardRow}>
-              <Avatar />
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardName}>Nimal Sahan</Text>
-                <Text style={styles.cardDesc}>Arriving to fix the kitchen plumbing system</Text>
-              </View>
-              {/* Timer */}
-              <View style={styles.timerBox}>
-                <View style={styles.redDot} />
-                <Text style={styles.timerNum}>{mins}</Text>
-                <Text style={styles.timerLabel}>MINS</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.actionRow}>
-
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => router.push('/TrackProvider')}
-              >
-                <Text style={styles.actionText}>CHECK LOCATION</Text>
-              </TouchableOpacity>
-              <View style={styles.actionSep} />
-
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => router.push('/ProviderProfile')}
-              >
-                <Text style={styles.actionText}>CONTACT PROVIDER</Text>
-              </TouchableOpacity>
+            <View style={styles.languageToggle}>
+              <Text style={[styles.langLabel, !isSinhala && styles.langLabelActive]}>ENG</Text>
+              <Text style={styles.langDivider}>|</Text>
+              <Text style={[styles.langLabel, isSinhala && styles.langLabelActive]}>සිං</Text>
+              <Switch
+                  value={isSinhala}
+                  onValueChange={toggleLanguage}
+                  trackColor={{ false: 'rgba(255,255,255,0.3)', true: '#FF6B35' }}
+                  thumbColor={isSinhala ? '#fff' : '#f0f0f0'}
+                  ios_backgroundColor="rgba(255,255,255,0.3)"
+                  style={styles.switchStyle}
+              />
             </View>
           </View>
 
-          {/* Card 2 — tap to expand */}
-          <TouchableOpacity
-            style={styles.card}
-            activeOpacity={0.85}
-            onPress={() => setSecondExpanded(p => !p)}
-          >
-            <View style={styles.cardRow}>
-              <Avatar />
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardName}>Nimal</Text>
-                <Text style={styles.cardDesc}>Arriving for the House wiring</Text>
+          {/* LOADING */}
+          {loading ? (
+              <View style={styles.centred}>
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={styles.centredText}>{t('Loading your bookings…')}</Text>
               </View>
-              {/* Green badge */}
-              <View style={styles.greenBadge}>
-                <Text style={styles.greenBadgeText}></Text>
-              </View>
-            </View>
 
-            {secondExpanded && (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => router.push('/TrackProvider')}
-                  >
-                    <Text style={styles.actionText}>CHECK LOCATION</Text>
-                  </TouchableOpacity>
-                  <View style={styles.actionSep} />
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => router.push('/ProviderProfile')}
-                  >
-                    <Text style={styles.actionText}>CONTACT PROVIDER</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* ── FINISHED SECTION ── */}
-          <SectionHeader title="FINISHED" style={{ marginTop: 10 }} />
-
-          {FINISHED_JOBS.map((job) => (
-            <TouchableOpacity
-              key={job.id}
-              style={styles.card}
-              activeOpacity={0.8}
-              onPress={() => openModal(job)}
-            >
-              <View style={styles.cardRow}>
-                <Avatar />
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardName}>{job.providerName}</Text>
-                  <Text style={styles.cardDesc}>{job.jobDescription}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-
-          {/* ── RESCHEDULED BUTTON ── */}
-          <TouchableOpacity
-            style={styles.rescheduledBtn}
-            activeOpacity={0.85}
-            onPress={() => router.push('/RescheduledJobs')}
-          >
-            <Text style={styles.rescheduledText}>Rescheduled Jobs</Text>
-          </TouchableOpacity>
-
-          <View style={{ height: 50 }} />
-        </ScrollView>
-
-        {/* ── FINISHED JOB MODAL ── */}
-        <Modal
-          visible={modalVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-
-              {/* Modal handle */}
-              <View style={styles.modalHandle} />
-
-              {/* Provider header */}
-              <View style={styles.modalHeader}>
-                <Avatar size={58} />
-                <View style={{ marginLeft: 14, flex: 1 }}>
-                  <Text style={styles.modalName}>{selectedJob?.providerName}</Text>
-                  <Text style={styles.modalCategory}>{selectedJob?.category}</Text>
-                </View>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.closeBtnText}>✕</Text>
+              /* ERROR */
+          ) : error ? (
+              <View style={styles.centred}>
+                <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.centredText}>{error}</Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={() => loadBookings()}>
+                  <Text style={styles.retryText}>{t('Try Again')}</Text>
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.modalDivider} />
-
-              {/* Details */}
-              <ModalRow label="Job Description" value={selectedJob?.jobDescription ?? ''} />
-              <ModalRow label="Amount" value={selectedJob?.amount ?? ''} valueColor="#0072FF" />
-              <ModalRow label="Date & Time" value={selectedJob?.dateTime ?? ''} />
-
-              {/* Rescheduled */}
-              <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>Rescheduled</Text>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: selectedJob?.rescheduled ? '#FF6B35' : '#28A745' }
-                ]}>
-                  <Text style={styles.statusText}>
-                    {selectedJob?.rescheduled ? '↻  Yes' : '✓  No'}
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setModalVisible(false)}
+              /* MAIN CONTENT */
+          ) : (
+              <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.scroll}
+                  refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={() => loadBookings(true)}
+                        tintColor="#fff"
+                    />
+                  }
               >
-                <Text style={styles.modalCloseBtnText}>CLOSE</Text>
-              </TouchableOpacity>
 
+                {/* ── UPCOMING ── */}
+                <SectionHeader title={t('UPCOMING')} />
+
+                {upcoming.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyText}>{t('No upcoming bookings')}</Text>
+                    </View>
+                ) : (
+                    upcoming.map((booking, idx) => {
+                      const isFirst    = idx === 0;
+                      const isExpanded = expandedId === booking.booking_id;
+
+                      return (
+                          <TouchableOpacity
+                              key={booking.booking_id}
+                              style={styles.card}
+                              activeOpacity={isFirst ? 1 : 0.85}
+                              onPress={() => !isFirst && setExpandedId(isExpanded ? null : booking.booking_id)}
+                          >
+                            <View style={styles.cardRow}>
+                              <Avatar name={booking.provider_name} />
+                              <View style={styles.cardInfo}>
+                                <Text style={styles.cardName}>{booking.provider_name}</Text>
+                                <Text style={styles.cardCategory}>{booking.category_name}</Text>
+                                <Text style={styles.cardDesc} numberOfLines={2}>{booking.summary}</Text>
+                              </View>
+                              {/* Status badge */}
+                              <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[booking.status] ?? '#888' }]} />
+                            </View>
+
+                            {/* Date/time row always visible on upcoming */}
+                            <View style={styles.dateRow}>
+                              <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.7)" />
+                              <Text style={styles.dateText}>{formatDateTime(booking.date, booking.time)}</Text>
+                            </View>
+
+                            {/* Expanded actions (first card always shows, rest toggle) */}
+                            {(isFirst || isExpanded) && (
+                                <>
+                                  <View style={styles.divider} />
+
+                                  {booking.status === 'pending' ? (
+                                      /* ── PENDING: show Pay Now button ── */
+                                      <TouchableOpacity
+                                          style={styles.payBtn}
+                                          onPress={() => router.push({
+                                            pathname: '/Checkout',
+                                            params: {
+                                              bookingId:   booking.booking_id,
+                                              providerName: booking.provider_name,
+                                              date:        formatDateTime(booking.date, booking.time),
+                                              summary:     booking.summary,
+                                            },
+                                          })}
+                                      >
+                                        <Text style={styles.payBtnText}>{t('PAY NOW')}</Text>
+                                      </TouchableOpacity>
+                                  ) : (
+                                      /* ── CONFIRMED: show location + provider actions ── */
+                                      <View style={styles.actionRow}>
+                                        <TouchableOpacity
+                                            style={styles.actionBtn}
+                                            onPress={() => router.push({
+                                              pathname: '/MapScreen',
+                                              params: {bookingId: booking.booking_id}
+                                            })}
+                                        >
+                                          <Text style={styles.actionText}>{t('SEE LOCATION')}</Text>
+                                        </TouchableOpacity>
+                                        <View style={styles.actionSep} />
+                                        <TouchableOpacity
+                                            style={styles.actionBtn}
+                                            onPress={() => router.push({
+                                              pathname: '/ProviderProfile',
+                                              params: { id: booking.provider_id },
+                                            })}
+                                        >
+                                          <Text style={styles.actionText}>{t('VIEW PROVIDER')}</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                  )}
+                                </>
+                            )}
+                          </TouchableOpacity>
+                      );
+                    })
+                )}
+
+                {/* ── FINISHED ── */}
+                <SectionHeader title={t('FINISHED')} style={{ marginTop: 10 }} />
+
+                {finished.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyText}>{t('No finished bookings yet')}</Text>
+                    </View>
+                ) : (
+                    finished.map(booking => (
+                        <TouchableOpacity
+                            key={booking.booking_id}
+                            style={styles.card}
+                            activeOpacity={0.8}
+                            onPress={() => { setSelectedJob(booking); setModalVisible(true); }}
+                        >
+                          <View style={styles.cardRow}>
+                            <Avatar name={booking.provider_name} />
+                            <View style={styles.cardInfo}>
+                              <Text style={styles.cardName}>{booking.provider_name}</Text>
+                              <Text style={styles.cardCategory}>{booking.category_name}</Text>
+                              <Text style={styles.cardDesc} numberOfLines={1}>{booking.summary}</Text>
+                            </View>
+                            <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[booking.status] ?? '#888' }]} />
+                          </View>
+                          <View style={styles.dateRow}>
+                            <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.7)" />
+                            <Text style={styles.dateText}>{formatDateTime(booking.date, booking.time)}</Text>
+                          </View>
+                        </TouchableOpacity>
+                    ))
+                )}
+
+                <View style={{ height: 50 }} />
+              </ScrollView>
+          )}
+
+          {/* ── FINISHED JOB DETAIL MODAL ── */}
+          <Modal
+              visible={modalVisible}
+              transparent
+              animationType="slide"
+              onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <View style={styles.modalHandle} />
+
+                <View style={styles.modalHeader}>
+                  <Avatar name={selectedJob?.provider_name ?? '?'} size={46} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.modalName}>{selectedJob?.provider_name}</Text>
+                    <Text style={styles.modalCategory}>{selectedJob?.category_name}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
+                    <Text style={styles.closeBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.modalDivider} />
+
+                <ModalRow label={t('Job Description')} value={selectedJob?.summary ?? '—'} />
+                <ModalRow
+                    label={t('Date & Time')}
+                    value={selectedJob ? formatDateTime(selectedJob.date, selectedJob.time) : '—'}
+                />
+
+                {/* Status badge */}
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>{t('Status')}</Text>
+                  <View style={[styles.statusBadge, {
+                    backgroundColor: STATUS_COLORS[selectedJob?.status ?? ''] ?? '#888'
+                  }]}>
+                    <Text style={styles.statusText}>
+                      {selectedJob?.status?.charAt(0).toUpperCase() + (selectedJob?.status?.slice(1) ?? '')}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.modalCloseBtn}
+                    onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.modalCloseBtnText}>{t('CLOSE')}</Text>
+                </TouchableOpacity>
+
+              </View>
             </View>
-          </View>
-        </Modal>
+          </Modal>
 
-      </SafeAreaView>
-    </LinearGradient>
+        </SafeAreaView>
+      </LinearGradient>
   );
 }
 
-// ─── Small helper components ──────────────────────────────────────────
-function SectionHeader({ title, style }: { title: string; style?: object }) {
-  return (
-    <View style={[styles.sectionHeader, style]}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionLine} />
-    </View>
-  );
-}
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-function ModalRow({
-  label, value, valueColor = '#1a1a1a',
-}: {
-  label: string; value: string; valueColor?: string;
-}) {
-  return (
-    <View style={styles.modalRow}>
-      <Text style={styles.modalLabel}>{label}</Text>
-      <Text style={[styles.modalValue, { color: valueColor }]}>{value}</Text>
-    </View>
-  );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea:  { flex: 1 },
@@ -311,86 +363,66 @@ const styles = StyleSheet.create({
 
   // Top bar
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   backArrow: { color: 'white', fontSize: 30, fontWeight: '300', marginTop: -6 },
-
-  // Language toggle
   languageToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
   },
   langLabel:       { color: 'rgba(255,255,255,0.5)', fontWeight: '700', fontSize: 13, marginHorizontal: 3 },
   langLabelActive: { color: 'white' },
   langDivider:     { color: 'rgba(255,255,255,0.4)', marginHorizontal: 2 },
   switchStyle:     { marginLeft: 6, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] },
 
+  // Centred states
+  centred: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 30 },
+  centredText: { color: 'rgba(255,255,255,0.9)', fontSize: 15, textAlign: 'center' },
+  retryBtn: {
+    backgroundColor: 'white', borderRadius: 25,
+    paddingVertical: 10, paddingHorizontal: 28,
+  },
+  retryText: { color: '#0072FF', fontWeight: '700', fontSize: 14 },
+
   // Section header
   sectionHeader: { alignItems: 'center', marginBottom: 14, marginTop: 8 },
   sectionTitle:  { color: 'white', fontWeight: '800', fontSize: 17, letterSpacing: 2, marginBottom: 8 },
   sectionLine:   { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.3)' },
 
+  // Empty state
+  emptyCard: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 12,
+  },
+  emptyText: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
+
   // Avatar
   avatar: {
     backgroundColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
   },
 
   // Cards
   card: {
     backgroundColor: 'rgba(255,255,255,0.16)',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 18, padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
   },
-  cardRow:  { flexDirection: 'row', alignItems: 'center' },
-  cardInfo: { flex: 1 },
-  cardName: { color: 'white', fontWeight: '700', fontSize: 15, marginBottom: 3 },
-  cardDesc: { color: 'rgba(255,255,255,0.78)', fontSize: 12, lineHeight: 17 },
-
-  // Timer
-  timerBox:   { alignItems: 'center', marginLeft: 8, position: 'relative' },
-  timerNum:   { color: 'white', fontWeight: '800', fontSize: 30, lineHeight: 36 },
-  timerLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  redDot: {
-    position: 'absolute',
-    top: -10, right: -4,
-    width: 11, height: 11,
-    borderRadius: 6,
-    backgroundColor: '#FF3B30',
-  },
-
-  // Green notification badge
-  greenBadge: {
-    width: 22, height: 22,
-    borderRadius: 11,
-    backgroundColor: '#28A745',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-  },
-  greenBadgeText: { color: 'white', fontSize: 12, fontWeight: '700' },
+  cardRow:     { flexDirection: 'row', alignItems: 'center' },
+  cardInfo:    { flex: 1 },
+  cardName:    { color: 'white', fontWeight: '700', fontSize: 15, marginBottom: 1 },
+  cardCategory:{ color: 'rgba(255,255,255,0.55)', fontSize: 11, marginBottom: 3 },
+  cardDesc:    { color: 'rgba(255,255,255,0.78)', fontSize: 12, lineHeight: 17 },
+  statusDot:   { width: 10, height: 10, borderRadius: 5, marginLeft: 8 },
+  dateRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  dateText:    { color: 'rgba(255,255,255,0.65)', fontSize: 11 },
 
   // Divider & actions
   divider:   { height: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 12 },
@@ -399,76 +431,50 @@ const styles = StyleSheet.create({
   actionText:{ color: 'white', fontWeight: '700', fontSize: 11, letterSpacing: 0.5 },
   actionSep: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.35)' },
 
-  // Rescheduled button
-  rescheduledBtn: {
-    alignSelf: 'center',
-    marginTop: 22,
+  // Pay Now button (pending bookings)
+  payBtn: {
     backgroundColor: 'white',
-    borderRadius: 30,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
-  rescheduledText: { color: '#0072FF', fontWeight: '700', fontSize: 14 },
+  payBtnText: { color: '#0072FF', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
 
   // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: 'white',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    padding: 24,
-    paddingBottom: 36,
+    borderTopLeftRadius: 26, borderTopRightRadius: 26,
+    padding: 24, paddingBottom: 36,
   },
   modalHandle: {
-    width: 40, height: 4,
-    borderRadius: 2,
-    backgroundColor: '#ddd',
-    alignSelf: 'center',
-    marginBottom: 16,
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#ddd', alignSelf: 'center', marginBottom: 16,
   },
   modalHeader:   { flexDirection: 'row', alignItems: 'center' },
   modalName:     { fontWeight: '700', fontSize: 17, color: '#1a1a1a' },
   modalCategory: { color: '#888', fontSize: 13, marginTop: 2 },
   closeBtn: {
-    width: 32, height: 32,
-    borderRadius: 16,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
-  closeBtnText: { color: '#555', fontSize: 14, fontWeight: '700' },
-  modalDivider: { height: 1, backgroundColor: '#eee', marginVertical: 14 },
+  closeBtnText:  { color: '#555', fontSize: 14, fontWeight: '700' },
+  modalDivider:  { height: 1, backgroundColor: '#eee', marginVertical: 14 },
   modalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 14,
   },
-  modalLabel: { color: '#888', fontSize: 13, fontWeight: '600', flex: 1 },
-  modalValue: { fontSize: 13, fontWeight: '600', flex: 2, textAlign: 'right' },
-  statusBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  statusText: { color: 'white', fontWeight: '700', fontSize: 12 },
+  modalLabel:  { color: '#888', fontSize: 13, fontWeight: '600', flex: 1 },
+  modalValue:  { fontSize: 13, fontWeight: '600', flex: 2, textAlign: 'right' },
+  statusBadge: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14 },
+  statusText:  { color: 'white', fontWeight: '700', fontSize: 12 },
   modalCloseBtn: {
-    marginTop: 8,
-    backgroundColor: '#0072FF',
-    borderRadius: 25,
-    paddingVertical: 15,
-    alignItems: 'center',
+    marginTop: 8, backgroundColor: '#0072FF',
+    borderRadius: 25, paddingVertical: 15, alignItems: 'center',
   },
   modalCloseBtnText: { color: 'white', fontWeight: '700', fontSize: 14, letterSpacing: 1 },
 });
 
 export default OrdersScreen;
+
