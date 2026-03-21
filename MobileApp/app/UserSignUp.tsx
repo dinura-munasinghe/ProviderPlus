@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { signupUser } from './services/authService';
 import { configureGoogleSignIn, signInWithGoogle } from './services/googleAuthService';
 import { useLanguage } from './context/LanguageContext'; // ✅ ADDED
+import { useAuth } from './context/AuthContext';
 
 const UserSignUp = () => {
 
@@ -39,6 +40,7 @@ const UserSignUp = () => {
         t('Continue with Google');
         t('Already have an account? Sign In');
     }, [isSinhala]);
+    const { setRole } = useAuth();
 
     // Form fields
     const [fullName, setFullName]               = useState('');
@@ -60,7 +62,7 @@ const UserSignUp = () => {
     const [confirmPasswordError, setConfirmPasswordError] = useState('');
     const [phoneError, setPhoneError]                     = useState('');
 
-    // ── Validation ─────────────────────────────────────────────────────────────
+    // ── Validation ──────────────────────────────────────────────────────
 
     const handleFullNameInput = (text: string) => {
         const filtered = text.replace(/[^a-zA-Z\s]/g, '');
@@ -108,7 +110,7 @@ const UserSignUp = () => {
         }
     };
 
-    // ── Google sign-in ─────────────────────────────────────────────────────────
+    // ── Google sign-in ──────────────────────────────────────────────────
 
     const handleGoogleSignIn = async () => {
         setIsGoogleLoading(true);
@@ -117,7 +119,13 @@ const UserSignUp = () => {
             const msg = response.is_new_user
                 ? `Welcome ${response.user_name}! Your account has been created.`
                 : `Welcome back, ${response.user_name}!`;
-            Alert.alert('Success!', msg, [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]);
+            Alert.alert('Success!', msg, [{
+                text: 'OK',
+                onPress: () => {
+                    setRole('user');
+                    router.replace('/CustomerProfile' as any);
+                }
+            }]);
         } catch (error: any) {
             Alert.alert('Google Sign-In Failed', error.message || 'Unable to sign in with Google.', [{ text: 'OK' }]);
         } finally {
@@ -125,7 +133,7 @@ const UserSignUp = () => {
         }
     };
 
-    // ── Submit ─────────────────────────────────────────────────────────────────
+    // ── Submit ──────────────────────────────────────────────────────────
 
     const handleSignUp = async () => {
         let hasError = false;
@@ -166,7 +174,13 @@ const UserSignUp = () => {
             Alert.alert(
                 'Welcome!',
                 `Your account has been created, ${response.user_name}.`,
-                [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+                [{
+                    text: 'OK',
+                    onPress: () => {
+                        setRole('user');
+                        router.replace('/CustomerProfile' as any);
+                    }
+                }]
             );
         } catch (error: any) {
             Alert.alert('Sign Up Failed', error.message || 'Something went wrong. Please try again.', [{ text: 'OK' }]);
@@ -175,7 +189,7 @@ const UserSignUp = () => {
         }
     };
 
-    // ── Render ─────────────────────────────────────────────────────────────────
+    // ── Render ──────────────────────────────────────────────────────────
 
     return (
         <View style={styles.mainContainer}>
@@ -301,7 +315,7 @@ const UserSignUp = () => {
                         </BlurView>
                         {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
 
-                        {/* ── Sign Up button ── */}
+                        {/* Sign Up button */}
                         <Pressable
                             style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
                             onPress={handleSignUp}
@@ -313,14 +327,14 @@ const UserSignUp = () => {
                             }
                         </Pressable>
 
-                        {/* ── OR divider ── */}
+                        {/* OR divider */}
                         <View style={styles.dividerContainer}>
                             <View style={styles.divider} />
                             <Text style={styles.dividerText}>OR</Text>
                             <View style={styles.divider} />
                         </View>
 
-                        {/* ── Google sign-in ── */}
+                        {/* Google sign-in */}
                         <Pressable
                             style={[styles.googleButton, (isLoading || isGoogleLoading) && styles.googleButtonDisabled]}
                             onPress={handleGoogleSignIn}
@@ -340,10 +354,10 @@ const UserSignUp = () => {
                             )}
                         </Pressable>
 
-                        {/* ── Already have account ── */}
+                        {/* Already have account */}
                         <Pressable
                             style={styles.loginLink}
-                            onPress={() => router.replace('/UserLogin')}
+                            onPress={() => router.replace('/(tabs)/UserLogin')}
                             disabled={isLoading}
                         >
                             {/* ✅ */}
@@ -356,8 +370,6 @@ const UserSignUp = () => {
         </View>
     );
 };
-
-// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
     mainContainer: { flex: 1 },
