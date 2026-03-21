@@ -1,6 +1,5 @@
 import apiClient from "./apiClient";
 
-
 interface Category {
     _id: string;
     name: string;

@@ -2,6 +2,8 @@ import os
 from fastapi import APIRouter, HTTPException, Security, Depends
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
+
+from ..schemas.booking_schemas import BookingResponse
 from ..services.geolocation_service import (
     save_sp_location,
     save_sp_base_location,
@@ -9,11 +11,16 @@ from ..services.geolocation_service import (
     update_live_location,
     get_live_location,
     get_directions,
-    search_places,
-    get_place_details,
     save_pinned_location,
     get_pinned_location,
 )
+from ..models.provider_model import Provider
+from ..models.booking_model import Booking, BookingStatus
+from ..models.user_model import User
+from ..core.security import get_current_user
+from datetime import datetime
+from typing import Optional
+
 
 router = APIRouter(prefix="/geo", tags=["Geolocation"])
 
@@ -65,6 +72,22 @@ class PinRequest(BaseModel):
     lng: float
     label: str | None = None   # The address string already shown on screen.
     # Pass it in to skip a redundant reverse-geocode call.
+
+class LiveLocationUpdate(BaseModel):
+    """Sent by the provider's device every 60 seconds while en route."""
+    booking_id: str
+    latitude: float
+    longitude: float
+
+
+class TrackingResponse(BaseModel):
+    """Returned to the user's MapScreen every 60 seconds."""
+    provider_name: str
+    provider_latitude: Optional[float]
+    provider_longitude: Optional[float]
+    user_latitude: Optional[float]
+    user_longitude: Optional[float]
+    has_live_location: bool   # False = provider hasn't started sending yet
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
@@ -146,20 +169,92 @@ def saved_pin(user_id: str):
     return result
 
 
-@router.get("/search-places")
-def search_places_endpoint(query: str):
-    result = search_places(query)
-    return {"suggestions": result}
-
-
-@router.get("/place-details")
-def place_details_endpoint(place_id: str):
-    result = get_place_details(place_id)
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-    return result
-
-
 @router.get("/config/maps-key")
 async def get_maps_key():
     return { "key": os.getenv("GOOGLE_MAPS_API_KEY") }
+
+
+@router.post("/live-location", status_code=200)
+async def update_live_location(
+        data: LiveLocationUpdate,
+        current_user: User = Depends(get_current_user),
+):
+    booking = await Booking.get(data.booking_id)
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    # Make sure this provider owns the booking
+    provider = await Provider.find_one(Provider.user_id == str(current_user.id))
+    if not provider or booking.provider_id != str(provider.id):
+        raise HTTPException(status_code=403, detail="Not authorised")
+
+    booking.sp_live_latitude   = data.latitude
+    booking.sp_live_longitude  = data.longitude
+    booking.sp_live_updated_at = datetime.utcnow()
+    await booking.save()
+
+    return {"message": "Location updated"}
+
+
+@router.get("/active", response_model=BookingResponse)
+async def get_active_booking(current_user: User = Depends(get_current_user)):
+    """
+    Returns the provider's current active booking (status = confirmed).
+    Called by the provider's dashboard to know which booking to send
+    live location updates for.
+    Returns 404 if there is no active booking right now.
+    """
+    provider = await Provider.find_one(Provider.user_id == str(current_user.id))
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider profile not found")
+
+    booking = await Booking.find_one(
+        Booking.provider_id == str(provider.id),
+        Booking.status == BookingStatus.confirmed,
+        )
+
+    if not booking:
+        raise HTTPException(status_code=404, detail="No active booking found")
+
+    return BookingResponse(
+        booking_id=str(booking.id),
+        status=booking.status,
+    )
+
+
+@router.get("/{booking_id}", response_model=TrackingResponse)
+async def get_tracking_data(
+        booking_id: str,
+        current_user: User = Depends(get_current_user),
+):
+    booking = await Booking.get(booking_id)
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    if booking.user_id != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorised")
+
+    provider = await Provider.get(booking.provider_id)
+    provider_name = provider.name if provider else "Provider"
+
+    has_live = booking.sp_live_latitude is not None
+
+    # Fall back to registered business location if no live position yet
+    provider_lat = booking.sp_live_latitude
+    provider_lng = booking.sp_live_longitude
+
+    if not has_live and provider and provider.location:
+        coords = provider.location.get("coordinates")
+        if coords and len(coords) == 2:
+            provider_lng = coords[0]
+            provider_lat = coords[1]
+
+    return TrackingResponse(
+        provider_name=provider_name,
+        provider_latitude=provider_lat,
+        provider_longitude=provider_lng,
+        user_latitude=booking.user_latitude,
+        user_longitude=booking.user_longitude,
+        has_live_location=has_live,
+    )
+

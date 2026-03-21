@@ -19,23 +19,27 @@ console.log("🔗 Connecting to Backend at:", BASE_URL);
 // 3. Create the Axios Instance
 const apiClient = axios.create({
     baseURL: BASE_URL,
-    timeout: 30000, // Wait 10 seconds before failing
+    timeout: 70000, // Wait 10 seconds before failing
     headers: {
         'Content-Type': 'application/json',
     }
 });
 
+let cachedToken: string | null = null;
+
+export const setTokenCache = (token: string | null) => { cachedToken = token; };
+
 apiClient.interceptors.request.use(
     async (config) => {
-        const token = await AsyncStorage.getItem('auth_token');
-        if(token){
-            config.headers.Authorization = `Bearer ${token}`;
+        if (!cachedToken) {
+            cachedToken = await AsyncStorage.getItem('auth_token');
+        }
+        if (cachedToken) {
+            config.headers.Authorization = `Bearer ${cachedToken}`;
         }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
-)
+    (error) => Promise.reject(error)
+);
 
 export default apiClient;

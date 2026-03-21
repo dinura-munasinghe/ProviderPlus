@@ -4,13 +4,14 @@ from jose import JWTError, jwt
 from typing import List
 
 from ..core.websocket_manager import manager
+from ..models.provider_model import Provider
 from ..services.messaging_service import MessagingService, create_booking
 from ..schemas.conversation_schemas import ConversationCreate, ConversationResponse
 from ..schemas.message_schemas import MessageCreate, MessageReadUpdate, PushTokenRegister
 from ..schemas.booking_schemas import BookingResponse, BookingCreate
 from ..models.user_model import User
 from ..models.conversation_model import Conversation
-from ..models.booking_model import Booking, BookingStatus
+from ..models.booking_model import Booking, BookingStatus, BookingWithProvider
 
 from ..core.security import SECRET_KEY, ALGORITHM
 
@@ -289,3 +290,48 @@ async def confirm_booking(
         booking_id=str(booking.id),
         status=booking.status
     )
+
+@router.get("/booking/my", response_model=List[BookingWithProvider])
+async def get_my_bookings(current_user: User = Depends(get_current_user)):
+    """
+    Returns all bookings for the currently logged-in user,
+    split by status so the frontend can show Upcoming vs Finished.
+    Provider name and category are populated here so the frontend
+    doesn't need to make extra calls.
+    """
+    bookings = await Booking.find(
+        Booking.user_id == str(current_user.id)
+    ).sort(-Booking.created_at).to_list()
+
+    result = []
+
+    for booking in bookings:
+        # Fetch linked provider to get name and category
+        provider = await Provider.get(booking.provider_id)
+
+        if not provider:
+            # Provider was deleted — still show the booking with a placeholder
+            provider_name  = "Unknown Provider"
+            category_name  = "Service"
+        else:
+            provider_name = provider.name
+            # Fetch the category document linked to the provider
+            try:
+                category     = await provider.category.fetch()
+                category_name = category.name
+            except Exception:
+                category_name = "Service"
+
+        result.append(BookingWithProvider(
+            booking_id=str(booking.id),
+            provider_id=booking.provider_id,
+            provider_name=provider_name,
+            category_name=category_name,
+            summary=booking.summary,
+            date=booking.date,
+            time=booking.time,
+            status=booking.status,
+            created_at=booking.created_at,
+        ))
+
+    return result
