@@ -18,9 +18,9 @@ The repository is organized into two primary modules:
 We utilize a **Forking Workflow** to maintain code quality and stability.
 
 ### Branching Strategy
-1. main: Production-ready stable code. Direct commits are restricted.
-2. dev: The upstream integration branch for active development. All Pull Requests from team members must target this branch.
-3. Fork-Based Feature Development: To maintain strict repository hygiene in our monorepo setup (FastAPI backend & React Native mobile app), individual tasks are developed on isolated branches within the developer's personal forked repository. Once a feature is complete, a Pull Request is opened from the fork to the upstream dev branch. Feature branches on forks are routinely deleted post-merge to maintain clean local environments.
+1. `main`: Production-ready stable code. Direct commits are restricted.
+2. `dev`: The upstream integration branch for active development. All Pull Requests from team members must target this branch.
+3. `Fork-Based Feature Development`: To maintain strict repository hygiene in our monorepo setup (FastAPI backend & React Native mobile app), individual tasks are developed on isolated branches within the developer's personal forked repository. Once a feature is complete, a Pull Request is opened from the fork to the upstream dev branch. Feature branches on forks are routinely deleted post-merge to maintain clean local environments.
 
 ### Contribution Steps
 1. **Sync**: Ensure your fork is up-to-date with the `upstream/dev` branch.
