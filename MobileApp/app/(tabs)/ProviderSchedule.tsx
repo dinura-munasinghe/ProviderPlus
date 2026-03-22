@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Switch, Modal, Dimensions,
-  Animated, Platform,
+  Animated, Platform, Linking, ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,63 +13,18 @@ import { useRoleBack } from '../hooks/useBackNavigation';
 
 const { width, height } = Dimensions.get('window');
 
-// ─── Mock Data ────────────────────────────────────────────────────────
-const UPCOMING_JOBS = [
-  {
-    id: '1',
-    jobTitle: 'Fix Kitchen Plumbing',
-    address: 'Galle Rd, Colombo-5',
-    customerName: 'Rodrigo',
-    category: 'Plumbing',
-    minutesLeft: 59,
-    alwaysExpanded: true,
-  },
-  {
-    id: '2',
-    jobTitle: 'Fix Bathroom',
-    address: 'Private Ln, Embuldeniya, Nugegoda',
-    customerName: 'Fernando',
-    category: 'Plumbing',
-    minutesLeft: 120,
-    alwaysExpanded: false,
-  },
-];
 
-const FINISHED_JOBS = [
-  {
-    id: '3',
-    jobTitle: 'Fix Bathroom',
-    address: 'Private Ln, Embuldeniya, Nugegoda',
-    customerName: 'Fernando',
-    jobDescription: 'Replaced all bathroom pipe joints and fixed the leaking tap.',
-    amount: 'LKR 4,500',
-    dateTime: '2025-06-10  ·  2:00 PM',
-    rescheduled: false,
-    category: 'Plumbing',
-  },
-  {
-    id: '4',
-    jobTitle: 'Fix Bathroom',
-    address: 'Private Ln, Embuldeniya, Nugegoda',
-    customerName: 'Fernando',
-    jobDescription: 'Full bathroom renovation plumbing work completed.',
-    amount: 'LKR 7,200',
-    dateTime: '2025-06-08  ·  10:00 AM',
-    rescheduled: true,
-    category: 'Plumbing',
-  },
-  {
-    id: '5',
-    jobTitle: 'Fix Bathroom',
-    address: 'Private Ln, Embuldeniya, Nugegoda',
-    customerName: 'Fernando',
-    jobDescription: 'Unclogged drain and resealed bathroom fixtures.',
-    amount: 'LKR 3,000',
-    dateTime: '2025-06-05  ·  4:00 PM',
-    rescheduled: false,
-    category: 'Plumbing',
-  },
-];
+import { fetchProviderBookings, ProviderBooking } from '../services/ordersService';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
+
+const formatDateTime = (date: string, time: string): string => {
+  const d = new Date(`${date}T${time}`);
+  if (isNaN(d.getTime())) return `${date}  ·  ${time}`;
+  const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return `${datePart}  ·  ${timePart}`;
+};
 
 // ─── Icon Placeholder ─────────────────────────────────────────────────
 function JobIcon({ size = 48 }: { size?: number }) {
@@ -80,7 +36,7 @@ function JobIcon({ size = 48 }: { size?: number }) {
 }
 
 // ─── Animated Finished Card ───────────────────────────────────────────
-function FinishedCard({ job, onPress }: { job: typeof FINISHED_JOBS[0]; onPress: () => void }) {
+function FinishedCard({ job, onPress }: { job: ProviderBooking; onPress: () => void }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -111,10 +67,10 @@ function FinishedCard({ job, onPress }: { job: typeof FINISHED_JOBS[0]; onPress:
 function JobDetailModal({
   job, visible, onClose,
 }: {
-  job: typeof FINISHED_JOBS[0] | null;
-  visible: boolean;
-  onClose: () => void;
-}) {
+     job: ProviderBooking | null;
+     visible: boolean;
+     onClose: () => void;
+   }) {
   const slideAnim = useRef(new Animated.Value(height)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -237,31 +193,87 @@ export default function ProviderScheduleScreen() {
   const [isSinhala, setIsSinhala] = useState(false);
   const toggleLanguage = () => setIsSinhala(prev => !prev);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [selectedJob, setSelectedJob] = useState<typeof FINISHED_JOBS[0] | null>(null);
+  const [selectedJob, setSelectedJob] = useState<ProviderBooking | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Countdown
-  const [mins, setMins] = useState(59);
+  const [bookings, setBookings] = useState<ProviderBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Tick every minute to refresh countdowns
+  const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const t = setInterval(() => setMins(p => (p > 0 ? p - 1 : 0)), 60000);
+    const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
 
-  const openModal = (job: typeof FINISHED_JOBS[0]) => {
-    setSelectedJob(job);
-    setModalVisible(true);
+  const loadBookings = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchProviderBookings();
+      setBookings(data);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? 'Could not load schedule.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadBookings(); }, []));
+
+  const upcoming = bookings.filter(b => b.status === 'pending' || b.status === 'confirmed');
+  const finished = bookings.filter(b => b.status === 'completed' || b.status === 'cancelled');
+
+  //Timing logic for the upcoming job
+const timeUntil = (date: string, time: string): { value: string; label: string; isImminent: boolean } => {
+  const target = new Date(`${date}T${time}`);
+  const diffMs = target.getTime() - now.getTime();
+
+  if (diffMs <= 0)  return { value: 'NOW',  label: '',      isImminent: true };
+
+  const totalMins  = Math.floor(diffMs / 60000);
+  const totalHours = Math.floor(totalMins / 60);
+  const totalDays  = Math.floor(totalHours / 24);
+  const totalWeeks = Math.floor(totalDays / 7);
+  const totalMonths= Math.floor(totalDays / 30);
+
+  if (totalMonths >= 2) return { value: `${totalMonths}`,  label: 'MONTHS', isImminent: false };
+  if (totalDays   >= 14) return { value: `${totalWeeks}`,  label: 'WEEKS',  isImminent: false };
+  if (totalHours  >= 24) return { value: `${totalDays}`,   label: 'DAYS',   isImminent: false };
+  if (totalMins   >= 60) return { value: `${totalHours}`,  label: 'HRS',    isImminent: false };
+                         return { value: `${totalMins}`,   label: 'MINS',   isImminent: totalMins <= 30 };
+};
+
+  const openMaps = (lat: number | null, lng: number | null) => {
+    if (!lat || !lng) return;
+    const url = Platform.select({
+      ios:     `maps://?q=${lat},${lng}`,
+      android: `geo:${lat},${lng}?q=${lat},${lng}`,
+    }) ?? `https://www.google.com/maps?q=${lat},${lng}`;
+    Linking.openURL(url).catch(() =>
+      Linking.openURL(`https://www.google.com/maps?q=${lat},${lng}`)
+    );
+  };
+
+  const openChat = (conversationId: string) => {
+    router.push({ pathname: '/Chat', params: { conversationId } });
   };
 
   return (
     <LinearGradient colors={['#1086b5', '#022373']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
 
-        {/* ── TOP BAR ── */}
+        {/* TOP BAR */}
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
-
           <View style={styles.languageToggle}>
             <Text style={[styles.langLabel, !isSinhala && styles.langLabelActive]}>ENG</Text>
             <Text style={styles.langDivider}>|</Text>
@@ -277,110 +289,121 @@ export default function ProviderScheduleScreen() {
           </View>
         </View>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
-        >
-
-          {/* ── UPCOMING JOBS ── */}
-          <SectionHeader title="UPCOMING JOBS" />
-
-          {/* Card 1 — always expanded */}
-          <View style={styles.card}>
-            <View style={styles.cardRow}>
-              <JobIcon />
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardTitle}>Fix Kitchen Plumbing</Text>
-                <Text style={styles.cardAddress}>Galle Rd, Colombo-5</Text>
-                <Text style={styles.cardCustomer}>Customer Name - Rodrigo</Text>
-              </View>
-              <View style={styles.timerBox}>
-                <View style={styles.redDot} />
-                <Text style={styles.timerNum}>{mins}</Text>
-                <Text style={styles.timerLabel}>MINS</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.actionRow}>
-              {/* ↓ connect navigation yourself */}
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => router.push('/TrackCustomer')}
-              >
-                <Text style={styles.actionText}>CHECK LOCATION</Text>
-              </TouchableOpacity>
-              <View style={styles.actionSep} />
-              {/* ↓ connect navigation yourself */}
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => router.push('/CustomerProfile')}
-              >
-                <Text style={styles.actionText}>CONTACT USER</Text>
-              </TouchableOpacity>
-            </View>
+        {loading ? (
+          <View style={styles.centred}>
+            <ActivityIndicator size="large" color="#fff" />
           </View>
-
-          {/* Card 2 — tap to expand */}
-          <TouchableOpacity
-            style={styles.card}
-            activeOpacity={0.85}
-            onPress={() => setExpandedId(expandedId === '2' ? null : '2')}
+        ) : error ? (
+          <View style={styles.centred}>
+            <Text style={styles.centredText}>{error}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => loadBookings()}>
+              <Text style={styles.retryText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scroll}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => loadBookings(true)} tintColor="#fff" />
+            }
           >
-            <View style={styles.cardRow}>
-              <JobIcon />
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardTitle}>Fix Bathroom</Text>
-                <Text style={styles.cardAddress}>Private Ln, Embuldeniya, Nugegoda</Text>
-                <Text style={styles.cardCustomer}>Customer Name - Fernando</Text>
+            {/* UPCOMING JOBS */}
+            <SectionHeader title="UPCOMING JOBS" />
+
+            {upcoming.length === 0 ? (
+                          <View style={styles.emptyCard}>
+                            <Text style={styles.emptyText}>No upcoming jobs</Text>
+                          </View>
+                        ) : (
+                          upcoming.map((booking, idx) => {
+                            const isFirst = idx === 0;
+                            const isExpanded = expandedId === booking.booking_id;
+
+                            // Calculate the timer exactly like you calculated isFirst!
+                            const t = isFirst ? timeUntil(booking.date, booking.time) : null;
+
+                            return (
+                              <TouchableOpacity
+                                key={booking.booking_id}
+                                style={styles.card}
+                                activeOpacity={isFirst ? 1 : 0.85}
+                                onPress={() => !isFirst && setExpandedId(isExpanded ? null : booking.booking_id)}
+                              >
+                                <View style={styles.cardRow}>
+                                  <JobIcon />
+                                  <View style={styles.cardInfo}>
+                                    <Text style={styles.cardTitle}>{booking.summary}</Text>
+                                    <Text style={styles.cardAddress}>{booking.category_name}</Text>
+                                    <Text style={styles.cardCustomer}>Customer - {booking.user_name}</Text>
+                                  </View>
+
+                                  {/* Now the JSX is just as clean as your OrdersScreen */}
+                                  {isFirst && t ? (
+                                    <View style={styles.timerBox}>
+                                      <View style={[styles.redDot, { backgroundColor: t.isImminent ? '#FF3B30' : '#FF9800' }]} />
+                                      <Text style={[styles.timerNum, t.value === 'NOW' && { fontSize: 20 }]}>{t.value}</Text>
+                                      {t.label ? <Text style={styles.timerLabel}>{t.label}</Text> : null}
+                                    </View>
+                                  ) : (
+                                    <View style={styles.greenDot} />
+                                  )}
+                                </View>
+
+                                {(isFirst || isExpanded) && (
+                                  <>
+                                    <View style={styles.divider} />
+                                    <View style={styles.actionRow}>
+                                      <TouchableOpacity
+                                        style={styles.actionBtn}
+                                        onPress={() => openMaps(booking.user_latitude, booking.user_longitude)}
+                                      >
+                                        <Text style={styles.actionText}>CHECK LOCATION</Text>
+                                      </TouchableOpacity>
+                                      <View style={styles.actionSep} />
+                                      <TouchableOpacity
+                                        style={styles.actionBtn}
+                                        onPress={() => openChat(booking.conversation_id)}
+                                      >
+                                        <Text style={styles.actionText}>CONTACT USER</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })
+                        )}
+
+            {/* FINISHED */}
+            <SectionHeader title="FINISHED" />
+
+            {finished.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No finished jobs yet</Text>
               </View>
-              <View style={styles.greenDot} />
-            </View>
-
-            {expandedId === '2' && (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => router.push('/TrackCustomer')}
-                  >
-                    <Text style={styles.actionText}>CHECK LOCATION</Text>
-                  </TouchableOpacity>
-                  <View style={styles.actionSep} />
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => router.push('/CustomerProfile')}
-                  >
-                    <Text style={styles.actionText}>CONTACT USER</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
+            ) : (
+              finished.map(job => (
+                <FinishedCard
+                  key={job.booking_id}
+                  job={job}
+                  onPress={() => { setSelectedJob(job); setModalVisible(true); }}
+                />
+              ))
             )}
-          </TouchableOpacity>
 
-          {/* ── FINISHED ── */}
-          <SectionHeader title="FINISHED" />
+            <TouchableOpacity
+              style={styles.rescheduledBtn}
+              activeOpacity={0.85}
+              onPress={() => router.push('/RescheduledJobs')}
+            >
+              <Text style={styles.rescheduledText}>Rescheduled Jobs</Text>
+            </TouchableOpacity>
 
-          {FINISHED_JOBS.map((job) => (
-            <FinishedCard key={job.id} job={job} onPress={() => openModal(job)} />
-          ))}
+            <View style={{ height: 60 }} />
+          </ScrollView>
+        )}
 
-          {/* ── RESCHEDULED BUTTON ── */}
-          {/* ↓ connect navigation yourself */}
-          <TouchableOpacity
-            style={styles.rescheduledBtn}
-            activeOpacity={0.85}
-            onPress={() => router.push('/RescheduledJobs')}
-          >
-            <Text style={styles.rescheduledText}>Rescheduled Jobs</Text>
-          </TouchableOpacity>
-
-          <View style={{ height: 60 }} />
-        </ScrollView>
-
-        {/* ── MODAL ── */}
         <JobDetailModal
           job={selectedJob}
           visible={modalVisible}
@@ -391,6 +414,24 @@ export default function ProviderScheduleScreen() {
     </LinearGradient>
   );
 }
+// // ─── New Booking Alert Modal ──────────────────────────────────────────
+// function NewBookingModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+//   return (
+//     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+//       <View style={styles.alertBackdrop}>
+//         <View style={styles.alertBox}>
+//           <Text style={styles.alertTitle}>Success</Text>
+//           <Text style={styles.alertMessage}>
+//             A new booking has been confirmed! Your schedule has been updated.
+//           </Text>
+//           <TouchableOpacity onPress={onClose} style={styles.alertButton}>
+//             <Text style={styles.alertButtonText}>OK</Text>
+//           </TouchableOpacity>
+//         </View>
+//       </View>
+//     </Modal>
+//   );
+// }
 
 // ─── Styles ───────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -560,4 +601,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalCloseBtnText: { color: 'white', fontWeight: '700', fontSize: 14, letterSpacing: 1 },
+  centred:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 30 },
+  centredText:{ color: 'rgba(255,255,255,0.9)', fontSize: 15, textAlign: 'center' },
+  retryBtn:   { backgroundColor: 'white', borderRadius: 25, paddingVertical: 10, paddingHorizontal: 28 },
+  retryText:  { color: '#022373', fontWeight: '700', fontSize: 14 },
+  emptyCard:  { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 12 },
+  emptyText:  { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
 });
