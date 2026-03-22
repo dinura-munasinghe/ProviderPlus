@@ -42,3 +42,17 @@ class BookingWithProvider(BaseModel):
     time: str
     status: str
     created_at: datetime
+
+class BookingWithCustomer(BaseModel):
+    booking_id: str
+    conversation_id: str
+    user_id: str
+    user_name: str
+    category_name: str
+    summary: str
+    date: str
+    time: str
+    status: str
+    created_at: datetime
+    user_latitude: Optional[float] = None
+    user_longitude: Optional[float] = None

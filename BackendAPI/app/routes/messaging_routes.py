@@ -11,7 +11,7 @@ from ..schemas.message_schemas import MessageCreate, MessageReadUpdate, PushToke
 from ..schemas.booking_schemas import BookingResponse, BookingCreate
 from ..models.user_model import User
 from ..models.conversation_model import Conversation
-from ..models.booking_model import Booking, BookingStatus, BookingWithProvider
+from ..models.booking_model import Booking, BookingStatus, BookingWithProvider, BookingWithCustomer
 
 from ..core.security import SECRET_KEY, ALGORITHM
 
@@ -287,13 +287,11 @@ async def store_booking_details(
 @router.patch("/booking/{booking_id}/confirm")
 async def confirm_booking(
         booking_id: str,
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
 ):
     booking = await Booking.get(booking_id)
-
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-
     if booking.user_id != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized")
 
@@ -346,6 +344,51 @@ async def get_my_bookings(current_user: User = Depends(get_current_user)):
             time=booking.time,
             status=booking.status,
             created_at=booking.created_at,
+        ))
+
+    return result
+
+@router.get("/booking/provider", response_model=List[BookingWithCustomer])
+async def get_provider_bookings(current_user: User = Depends(get_current_user)):
+    """
+    Returns all bookings assigned to the currently logged-in provider.
+    Populates customer name and category so the frontend doesn't need extra calls.
+    """
+    # Find the Provider document linked to this user account
+    provider = await Provider.find_one(Provider.user_id == str(current_user.id))
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider profile not found")
+
+    bookings = await Booking.find(
+        Booking.provider_id == str(provider.id)
+    ).sort(-Booking.created_at).to_list()
+
+    result = []
+    for booking in bookings:
+        # Fetch the customer
+        user = await User.get(booking.user_id)
+        user_name = user.full_name if user else "Unknown Customer"
+
+        # Fetch category from provider
+        try:
+            category = await provider.category.fetch()
+            category_name = category.name
+        except Exception:
+            category_name = "Service"
+
+        result.append(BookingWithCustomer(
+            booking_id=str(booking.id),
+            conversation_id=booking.conversation_id,
+            user_id=booking.user_id,
+            user_name=user_name,
+            category_name=category_name,
+            summary=booking.summary,
+            date=booking.date,
+            time=booking.time,
+            status=booking.status,
+            created_at=booking.created_at,
+            user_latitude=booking.user_latitude,
+            user_longitude=booking.user_longitude,
         ))
 
     return result

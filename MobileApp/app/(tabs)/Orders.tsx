@@ -71,8 +71,6 @@ function OrdersScreen() {
   const router = useRouter();
   useRoleBack();
 
-  // ✅ REMOVED local isSinhala, toggleLanguage
-  // ✅ ADDED — get from context
   const { isSinhala, toggleLanguage, t, isTranslating } = useLanguage();
 
   const [mins, setMins] = useState(59);
