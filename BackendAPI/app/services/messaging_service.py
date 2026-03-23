@@ -10,6 +10,7 @@ from ..schemas.conversation_schemas import ConversationCreate
 from ..schemas.message_schemas import MessageCreate, PushTokenRegister
 from ..core.websocket_manager import manager
 from ..services.notification_service import send_push_notification
+from  ..models.user_model import User
 
 
 class MessagingService:

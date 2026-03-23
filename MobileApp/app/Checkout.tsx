@@ -85,8 +85,8 @@ const PaymentScreenContent: React.FC = () => {
       try {
         await confirmBooking(bookingId);
         Alert.alert('Success', 'Payment confirmed! Provider+ service is booked.');
+        router.push('/');
         setIsReady(false);
-        router.push('../(tabs)/index');
       } catch (e) {
         console.error('Failed to confirm booking: ', e);
         Alert.alert(
