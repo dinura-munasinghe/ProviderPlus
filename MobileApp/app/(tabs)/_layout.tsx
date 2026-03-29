@@ -7,7 +7,7 @@ import { useAuth } from './../context/AuthContext';
 
 const GUEST_TABS    = ['index', 'Survy', 'Orders', 'UserLogin']                                    as const;
 const USER_TABS     = ['index', 'Survy', 'Orders', 'UserAccount']                                  as const;
-const PROVIDER_TABS = ['ProviderDash', 'Chats', 'ProviderSchedule', 'UserLogin']             as const;
+const PROVIDER_TABS = ['ProviderDash', 'Chats', 'ProviderSchedule', 'ProviderAccount']             as const;
 const ADMIN_TABS    = ['PendingProviders', 'UserAccount']                                             as const;
 
 const ICON_MAP: Record<string, any> = {
